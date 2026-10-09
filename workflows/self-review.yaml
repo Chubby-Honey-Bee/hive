@@ -1,0 +1,241 @@
+name: self-review
+description: |
+  Audit the target repo ({target_root}) against five quality lenses concurrently:
+  SOLID, complexity (O(1)/WASP/CDE), MSS-integrity-of-claims,
+  cyclomatic complexity, and idiomatic Go best practices. Each lens
+  agent emits structured findings; the synthesizer rolls them into
+  one review report.
+
+  This workflow is *read-only* on production code — agents do not
+  edit. Every node has accept: + on_reject: so the run is
+  autonomous-recoverable on any provider.
+
+version: 1
+
+inputs:
+  - target_root
+
+nodes:
+
+  # ─── Wave 1: parallel audits, one per lens ────────────────────
+
+  audit-solid:
+    type: agent
+    agent: self-reviewer
+    role: review-lens
+    tier: worker
+    prompt: |
+      LENS: SOLID principles (Single-responsibility, Open/closed,
+      Liskov, Interface-segregation, Dependency-inversion).
+
+      Scan the Go code under {target_root}/internal and
+      {target_root}/cmd. Use the shell, Grep and Read tools. Look for:
+        • Functions or structs that mix unrelated responsibilities
+        • Public types that callers must downcast to use
+        • Switches over concrete types that should be polymorphism
+        • Tight coupling where an interface would isolate change
+        • Big god-objects (>~400 LOC, many fields)
+
+      Verify each top-3 finding by re-reading the file. Do NOT cover
+      cyclomatic complexity, performance, or style — those have their
+      own lenses.
+
+      Return the JSON contract from your persona, lens="SOLID".
+    outputs: [findings_solid]
+    accept:
+      - "outputs.lens == 'SOLID'"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        Previous attempt did not produce a valid SOLID lens audit.
+        Original prompt: {original_prompt}
+        Outputs returned: {outputs}
+        Re-run, ensuring the response ends with a JSON object whose
+        "lens" field equals "SOLID".
+      max_repair_iterations: 1
+
+  audit-complexity-cde:
+    type: agent
+    agent: self-reviewer
+    role: review-lens
+    tier: worker
+    prompt: |
+      LENS: O(1)/WASP/CDE — algorithmic complexity & coordinate-encoding hygiene.
+
+      Scan {target_root}/internal/db, /internal/workflow, /internal/runner,
+      /internal/hive. Look for:
+        • Loops that scan a whole table where a coordinate probe (CDE)
+          could narrow the work to O(1) or O(log n)
+        • Missing indexes on hot WHERE columns (compare schema.go
+          indexes against query patterns)
+        • Unbounded slices appended to inside a loop without a cap
+        • Workflow-engine paths that re-parse YAML on every tick
+          when the parsed defn could be cached
+
+      Use Grep for `for rows.Next` + adjacent `WHERE` clauses to find
+      potential scans, and `CREATE INDEX` to cross-reference coverage.
+
+      Verify top-3 findings by re-read. Stay out of SOLID, MSS, and
+      cyclomatic concerns.
+
+      Return JSON, lens="O(1)/WASP/CDE".
+    outputs: [findings_complexity]
+    accept:
+      - "outputs.lens == 'O(1)/WASP/CDE'"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        Re-run with the JSON contract; lens must be exactly "O(1)/WASP/CDE".
+        Previous outputs: {outputs}
+      max_repair_iterations: 1
+
+  audit-mss:
+    type: agent
+    agent: self-reviewer
+    role: review-lens
+    tier: worker
+    prompt: |
+      LENS: MSS integrity-of-claims.
+
+      The repo claims four MSS-integrity rules (Partition, Traceability,
+      Independence, No-laundering — see docs/foundations.md § MSS — truth labels). Audit:
+        • Does the code in internal/mss + internal/db actually enforce
+          what docs/foundations.md says? List any rule that is documented but
+          not actually checked at write-time.
+        • Are there error paths that swallow MSS validation errors?
+        • Is the audit verdict (PASS/FAIL) computed correctly (i.e.
+          the four laundering/untraceable/cycle/partition lists feed
+          into "integrity" without a logic gap)?
+
+      Run `chb db-read mss_audit` against a freshly-init'd DB
+      (under /tmp) to see live output. Cross-check against
+      internal/mss/audit.go.
+
+      Verify top-3 findings by re-read.
+
+      Return JSON, lens="MSS".
+    outputs: [findings_mss]
+    accept:
+      - "outputs.lens == 'MSS'"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        Re-run with lens="MSS". Outputs were: {outputs}
+      max_repair_iterations: 1
+
+  audit-cyclomatic:
+    type: agent
+    agent: self-reviewer
+    role: review-lens
+    tier: worker
+    prompt: |
+      LENS: Cyclomatic complexity.
+
+      Identify the 10 most complex functions in the repo by
+      branch+loop count. Use the shell tool:
+        find {target_root} -name '*.go' ! -name '*_test.go' \
+          | xargs grep -lE 'func ' | head -200
+
+      For each candidate function ≥40 lines, count: `if`, `else if`,
+      `case`, `for`, `switch`, `&&`, `||`. Report functions with
+      cyclomatic complexity ≥ 10. Suggest a specific refactor
+      (extract helper, table-driven dispatch, early-return).
+
+      Verify top-3 findings by re-reading the function.
+
+      Return JSON, lens="cyclomatic".
+    outputs: [findings_cyclomatic]
+    accept:
+      - "outputs.lens == 'cyclomatic'"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        Re-run with lens="cyclomatic". Previous outputs: {outputs}
+      max_repair_iterations: 1
+
+  audit-go-idiom:
+    type: agent
+    agent: self-reviewer
+    role: review-lens
+    tier: worker
+    prompt: |
+      LENS: Idiomatic Go (current best practices, latest stdlib idioms).
+
+      Reference: Effective Go, Google Go Style Guide, Go Code Review
+      Comments, Go-by-Example, and the Go team's
+      blog.golang.org/error-handling-and-go pattern. Audit for:
+        • Errors wrapped with %w vs lost context
+        • Unused exported identifiers (lint candidates)
+        • `interface{}` where `any` is now standard (Go 1.18+)
+        • Non-context-aware blocking calls in long-running paths
+        • Sloppy pointer-vs-value receivers
+        • String concatenation in tight loops where strings.Builder
+          would be idiomatic
+        • Panic in non-init code where errors should be returned
+        • TODO/FIXME comments older than visible commit history
+
+      Stay out of SOLID, complexity, MSS, cyclomatic concerns.
+
+      Verify top-3 findings by re-read.
+
+      Return JSON, lens="go-idiom".
+    outputs: [findings_go_idiom]
+    accept:
+      - "outputs.lens == 'go-idiom'"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        Re-run with lens="go-idiom". Previous outputs: {outputs}
+      max_repair_iterations: 1
+
+  # ─── Wave 2: synthesis ────────────────────────────────────────
+
+  synthesize-review:
+    type: agent
+    agent: self-reviewer
+    role: review-synthesis
+    tier: worker
+    prompt: |
+      LENS: synthesis (NOT a new audit — aggregate the five lens
+      reports below and write a single review document). Write it to
+      SYNTHESIS.md: REVIEW.md is rendered from the extracted findings
+      after this run, and would overwrite anything written there.
+
+      Inputs from prior waves:
+        SOLID:        {findings_solid}
+        Complexity:   {findings_complexity}
+        MSS:          {findings_mss}
+        Cyclomatic:   {findings_cyclomatic}
+        Go-idiom:     {findings_go_idiom}
+
+      Use the shell tool to write the final report:
+        mkdir -p workspace/self-review
+        cat > workspace/self-review/SYNTHESIS.md <<'EOF'
+        # Self-Review Report
+        <fill with grouped findings, severity ranking, recommended fix order>
+        EOF
+
+      Confirm the file exists with `ls -la workspace/self-review/SYNTHESIS.md`.
+
+      Then return JSON:
+        {"lens":"synthesis","report_path":"workspace/self-review/SYNTHESIS.md",
+         "total_findings":<int>,"verdict":"clean|minor_issues|needs_work",
+         "findings":[],"summary":"<one paragraph>"}
+    outputs: [report_path, total_findings, verdict]
+    accept:
+      - "outputs.report_path == 'workspace/self-review/SYNTHESIS.md'"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        Synthesis didn't write the expected artifact. Outputs: {outputs}
+        Run the shell steps again, ensure the file lands at
+        workspace/self-review/SYNTHESIS.md, then return JSON.
+      max_repair_iterations: 2
+
+edges:
+  # Wave 1 — every audit runs in parallel, all gate to synthesis
+  - {from: audit-solid,           to: synthesize-review}
+  - {from: audit-complexity-cde,  to: synthesize-review}
+  - {from: audit-mss,             to: synthesize-review}
+  - {from: audit-cyclomatic,      to: synthesize-review}
+  - {from: audit-go-idiom,        to: synthesize-review}

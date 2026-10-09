@@ -1,0 +1,213 @@
+name: decompose
+description: "Goal decomposition into dependency waves with iterative execution"
+version: 1
+
+inputs:
+  - goal
+
+nodes:
+  # ─── Break goal into subtasks ──────────────────────────────────
+  plan:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: >
+      Decompose this goal into the smallest meaningful subtasks: {goal}
+
+      For each subtask, provide:
+      - ID (sequential number)
+      - Type: research / analysis / code / creative
+      - Description (precise, one clear focus per subtask)
+      - Dependencies (IDs of subtasks that must complete first)
+      - Model: haiku (simple), sonnet (standard), opus (complex)
+      - Priority: critical / important / nice-to-have
+
+      Group into dependency waves (Wave 1 = all independent, Wave 2 = depends on Wave 1, etc.)
+
+      Return JSON exactly:
+        {"subtask_plan":"<the full plan text>",
+         "task_count":<total subtasks>,
+         "wave_count":<number of waves>,
+         "wave1_tasks":["<one Wave 1 subtask per entry: its ID, type and description>"]}
+    outputs: [subtask_plan, task_count, wave_count, wave1_tasks]
+    accept:
+      - "outputs.subtask_plan != ''"
+      - "outputs.wave1_tasks != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  # ─── Decision: auto-execute or confirm? ─────────────────────────
+  check-size:
+    type: decision
+    condition: "task_count <= 8"
+    true_edge: wave1-execute
+    false_edge: confirm-plan
+
+  # ─── Human confirmation for large plans ─────────────────────────
+  confirm-plan:
+    type: human_review
+    prompt: >
+      Decomposition plan for: {goal}
+
+      {subtask_plan}
+
+      Total subtasks: {task_count} across {wave_count} waves.
+      This is a large plan. Approve to proceed, reject to revise,
+      or redirect with different scope.
+
+  # ─── Wave 1: all independent subtasks ──────────────────────────
+  wave1-execute:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt: >
+      Execute this one Wave 1 subtask for: {goal}
+
+      Subtask: {item}
+
+      Full plan, for context: {subtask_plan}
+
+      Work it as the specialist its type names (research, analysis,
+      code or creative). Wave 1 subtasks are independent; the others
+      run in parallel with this one.
+    fan_source: wave1_tasks
+    outputs: [wave1_results]
+    accept:
+      - "outputs.wave1_results != ''"
+    state_updates:
+      wave: 1
+
+  # ─── Evaluate Wave 1 ───────────────────────────────────────────
+  wave1-evaluate:
+    type: agent
+    agent: evaluator
+    tier: synthesist
+    prompt: >
+      Evaluate Wave 1 results for: {goal}
+
+      Original plan: {subtask_plan}
+      Wave 1 results: {wave1_results}
+
+      Check: Did all subtasks complete? Any gaps? Any new subtasks
+      emerging from the results? Adjust Wave 2 plan if needed.
+
+      Return JSON exactly:
+        {"eval_verdict":"COMPLETE|NEEDS_MORE_WORK",
+         "wave2_adjusted_plan":"<the Wave 2 plan, adjusted>",
+         "new_subtasks":"<subtasks added mid-flight, or none>",
+         "wave2_tasks":["<one Wave 2 subtask per entry, from the adjusted plan; empty list if none>"]}
+    outputs: [eval_verdict, wave2_adjusted_plan, new_subtasks, wave2_tasks]
+    accept:
+      - "outputs.eval_verdict != ''"
+      - "outputs.wave2_tasks != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  # ─── Decision: continue to Wave 2? ────────────────────────────
+  has-wave2:
+    type: decision
+    condition: "wave_count > 1"
+    true_edge: wave2-execute
+    false_edge: synthesize
+
+  # ─── Wave 2: dependent subtasks ────────────────────────────────
+  wave2-execute:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt: >
+      Execute this one Wave 2 subtask for: {goal}
+
+      Subtask: {item}
+
+      Adjusted plan, for context: {wave2_adjusted_plan}
+
+      Wave 1 results (use the ones this subtask depends on): {wave1_results}
+    fan_source: wave2_tasks
+    outputs: [wave2_results]
+    accept:
+      - "outputs.wave2_results != ''"
+    state_updates:
+      wave: 2
+
+  # ─── Evaluate Wave 2 ───────────────────────────────────────────
+  wave2-evaluate:
+    type: agent
+    agent: evaluator
+    tier: synthesist
+    prompt: >
+      Evaluate Waves 1-2 results for: {goal}
+
+      Wave 1: {wave1_results}
+      Wave 2: {wave2_results}
+      New subtasks added: {new_subtasks}
+
+      Is the goal fully achieved?
+
+      Return JSON exactly:
+        {"eval_verdict":"COMPLETE|NEEDS_MORE_WORK",
+         "wave3_tasks":["<one remaining subtask per entry; empty list if COMPLETE>"]}
+    outputs: [eval_verdict, wave3_tasks]
+    accept:
+      - "outputs.eval_verdict != ''"
+      - "outputs.wave3_tasks != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  # ─── Decision: need Wave 3? ────────────────────────────────────
+  needs-wave3:
+    type: decision
+    condition: "eval_verdict == 'NEEDS_MORE_WORK' and wave_count > 2"
+    true_edge: wave3-execute
+    false_edge: synthesize
+
+  # ─── Wave 3 (rare) ─────────────────────────────────────────────
+  wave3-execute:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt: >
+      Execute this one Wave 3 subtask for: {goal}. This is the final wave.
+
+      Subtask: {item}
+    fan_source: wave3_tasks
+    outputs: [wave3_results]
+    accept:
+      - "outputs.wave3_results != ''"
+    state_updates:
+      wave: 3
+
+  # ─── Final synthesis ───────────────────────────────────────────
+  synthesize:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: >
+      Synthesize all results for: {goal}
+
+      Wave 1: {wave1_results}
+      Wave 2: {wave2_results}
+      Wave 3: {wave3_results}
+
+      Combine into a coherent response addressing the original goal.
+      Report: total waves executed, agents spawned, tasks completed
+      vs. added mid-flight.
+    outputs: [final_synthesis]
+    accept:
+      - "outputs.final_synthesis != ''"
+
+edges:
+  - from: plan
+    to: check-size
+  - from: confirm-plan
+    to: wave1-execute
+  - from: wave1-execute
+    to: wave1-evaluate
+  - from: wave1-evaluate
+    to: has-wave2
+  - from: wave2-execute
+    to: wave2-evaluate
+  - from: wave2-evaluate
+    to: needs-wave3
+  - from: wave3-execute
+    to: synthesize

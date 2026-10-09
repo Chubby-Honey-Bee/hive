@@ -1,0 +1,364 @@
+name: hive
+description: "Autonomous mode (`chb hive`): HIVE directs its own research on a seeded project, looping scan → dispatch → gate → merge → complete-iteration until the project is terminal, two passes change nothing, or the hive has run max_iterations passes, then writes the final synthesis."
+version: 1
+
+inputs:
+  - project
+  - max_iterations
+
+nodes:
+  # The relays are command nodes: the runner runs chb itself, with no shell
+  # and no model, and a non-zero exit fails the node. Only dispatch,
+  # evaluate and final-synthesis call a model, and each must answer with the
+  # JSON object its output_schema describes. Each names a tier, not a model,
+  # so the budget mode (and the models config) chooses the model; under
+  # --profile, its role does.
+  # db is the database the hive uses, the run's own (agent-run points the
+  # whole run at the one the hive rule chooses for the project).
+  init:
+    type: command
+    argv: [chb, hive, init, --project, "{project}", --json]
+    outputs_from: stdout_json
+    outputs: [iteration, db]
+    state_updates:
+      start_iteration: "{iteration}"
+
+  # `hive next` counts one pass per run of this node. max_iterations caps
+  # the hive's count, which persists across runs until `chb hive reset`: a
+  # hive at the cap is not scanned, and the scan reports phase capped.
+  # --apply runs the plan's mechanical actions itself (fix_mss,
+  # cascade_revert, cap_finding, adjust_params) in the scan's transaction.
+  scan:
+    type: command
+    argv: [chb, hive, next, --project, "{project}", --apply, --max-iterations, "{max_iterations}"]
+    outputs_from: stdout_json
+    outputs: [phase, research_actions, gate_requested, gate_wave, iteration]
+    state_updates:
+      hive_plan: "{research_actions}"
+
+  check-terminal:
+    type: decision
+    condition: "phase == 'terminal' or phase == 'capped'"
+    true_edge: report
+    false_edge: check-has-actions
+
+  # research_actions are the plan's dispatch_agent actions: the research and
+  # the adjudication only a model can do.
+  check-has-actions:
+    type: decision
+    condition: "len(research_actions) > 0"
+    true_edge: dispatch
+    false_edge: check-gate
+
+  # A dispatch that runs no tool did none of the actions, whatever its
+  # report says, so min_tool_calls sends it back to its repair, which keeps
+  # the tools and does the work; a repair that runs no tool either is
+  # rejected.
+  dispatch:
+    type: agent
+    agent: analyst
+    role: hive-research
+    tier: planner
+    min_tool_calls: 1
+    prompt: |
+      Carry out the hive's research actions for project '{project}'. The actions, as JSON:
+        {hive_plan}
+
+      The work is done with your tools. Run each chb command below with the
+      shell tool, one call per command, and read what it prints. The JSON
+      report comes last, after the commands have run. A report with no tool
+      call is rejected and sent back to you, since the actions it describes
+      were not taken.
+
+      Work through the actions in priority order and do each one yourself:
+      nothing can spawn another agent for you. Each chb command prints what
+      it wrote. If a command fails, report the failure in your results; never
+      report an action done that you did not do. The workflow runs `chb hive
+      next` and `chb hive complete` itself, once per pass, and refuses a pass
+      whose iteration moved, so leave those two to it.
+
+      - dispatch_agent with signal_type gap_fill or waggle_dance: research the
+        question in the action's prompt. Record each discrete answer as its own
+        finding, at the action's wave and target_coords:
+          chb db-write finding '{"wave":W,"agent":"hive-scout","d1":D1,"mss_label":"assumption","finding":"...","evidence":"...","source_urls":"URL"}'
+        It prints the new finding's id. Register each source you relied on:
+          chb db-write source '{"url":"URL","title":"...","agent":"hive-scout","wave":W}'
+        When the action's payload carries a gap_id and one of your findings
+        answers that gap, close the gap with that finding:
+          chb db-write resolve_gap '{"gap_id":G,"wave":W,"agent":"hive-scout","finding_id":F}'
+        Label honestly: a fact you read from a source is an assumption, with that
+        source in source_urls; a scope or threshold chosen here is a definition;
+        a claim that follows from findings already written is a guarantee, with
+        their ids in depends_on_ids; what you could not establish is an unknown.
+      - dispatch_agent with signal_type conflict_resolution: adjudicate it under
+        the verifier protocol. Check both findings against their own sources.
+        When the evidence settles it, name the finding that survives (F), revert
+        what rests on the other one (L), and close the conflict (C is the
+        action's payload.conflict_id), in this order:
+          chb db-write conflict_winner '{"conflict_id":C,"winner_finding_id":F}'
+          chb db-write cascade_revert L
+          chb db-write resolve_conflict '{"conflict_id":C,"wave":W,"resolution":"finding F survives: <why>"}'
+        When it does not, leave the conflict open and say what is missing.
+
+      When the commands have run, answer with the JSON object alone, exactly:
+      {"dispatch_results":"<one line per action: what you ran and what it printed>","findings_written":<the number of findings you wrote, as a number>,"gaps_resolved":<the number of gaps you closed, as a number>}
+    outputs: [dispatch_results, findings_written, gaps_resolved]
+    output_schema:
+      type: object
+      additionalProperties: false
+      required: [dispatch_results, findings_written, gaps_resolved]
+      properties:
+        dispatch_results: {type: string, minLength: 1}
+        findings_written: {type: integer, minimum: 0}
+        gaps_resolved: {type: integer, minimum: 0}
+    accept:
+      - "outputs.dispatch_results != ''"
+    # The repair keeps the node's tools, and the reason in {accept_failure}
+    # says which repair this is. After a call that made no tool call, the
+    # actions were not taken, so it does them now. After a malformed answer,
+    # the actions it would repeat write to the database, so it runs nothing
+    # and reports what that answer says was done.
+    on_reject:
+      max_repair_iterations: 1
+      prompt_template: |
+        Your answer to the hive's research actions was sent back. The reason:
+          {accept_failure}
+
+        Your answer was:
+          {outputs}
+
+        The task was:
+          {original_prompt}
+
+        What to do now depends on the reason above.
+        - If it says you made too few tool calls: the actions were not taken.
+          Do them now. Run each chb command with the shell tool, one call per
+          command, read what it prints, and then report what ran.
+        - If it says anything else, such as that the answer was not the JSON
+          object the schema needs: the actions are done as far as that answer
+          took them. Leave the database as it is and run no command. Report
+          what that answer says was done.
+
+        Then reply with the JSON object alone, exactly:
+        {"dispatch_results":"<one line per action: what was run and what it printed>","findings_written":<the number of findings written, as a number>,"gaps_resolved":<the number of gaps closed, as a number>}
+
+  # The gate, when the plan asks for one. chb checks the wave's sources and
+  # gathers what the evaluator reads; the evaluator only scores the wave and
+  # names what is missing; `guard --eval-stdin` derives the verdict from
+  # those, records the gaps and runs the gate. A closed gate exits 1, which
+  # is an answer here, not a failure.
+  check-gate:
+    type: decision
+    condition: "gate_requested == true"
+    true_edge: validate-sources
+    false_edge: merge
+
+  validate-sources:
+    type: command
+    argv: [chb, validate-sources, --wave, "{gate_wave}"]
+
+  gate-state:
+    type: command
+    argv: [chb, hive, report, --project, "{project}", --wave, "{gate_wave}"]
+    outputs_from: stdout_json
+    outputs: [findings_total, findings, wave_sources, open_gaps]
+
+  evaluate:
+    type: agent
+    agent: analyst
+    role: evaluate
+    tier: planner
+    tools: []
+    prompt: |
+      Judge the hive's research on wave {gate_wave} of project '{project}',
+      before its gate.
+
+      The wave's findings ({findings_total} in all), as JSON:
+        {findings}
+      The wave's sources, with what validate-sources found for each, as JSON:
+        {wave_sources}
+      The gaps still open, as JSON:
+        {open_gaps}
+
+      First name the gaps: the questions that must be answered before this
+      wave's research is complete, at most 3, each one sentence. Name none
+      only when nothing important is missing. Then score the wave from 1
+      (poor) to 5 (complete) on coverage (do the findings answer what the
+      research set out to answer), depth (specific facts, not overviews),
+      sources (claims backed by sources that were reached) and actionability.
+      A finding whose source validate-sources could not reach does not count
+      as sourced.
+
+      Answer with the JSON object alone, exactly:
+      {"gaps":["<a question still open>"],"coverage":N,"depth":N,"sources":N,"actionability":N}
+    outputs: [gaps, coverage, depth, sources, actionability]
+    output_schema:
+      type: object
+      additionalProperties: false
+      required: [gaps, coverage, depth, sources, actionability]
+      properties:
+        gaps:
+          type: array
+          maxItems: 3
+          items: {type: string, minLength: 1}
+        coverage: {type: integer, minimum: 1, maximum: 5}
+        depth: {type: integer, minimum: 1, maximum: 5}
+        sources: {type: integer, minimum: 1, maximum: 5}
+        actionability: {type: integer, minimum: 1, maximum: 5}
+    accept:
+      - "outputs.coverage >= 1"
+    on_reject:
+      max_repair_iterations: 1
+
+  gate:
+    type: command
+    argv: [chb, guard, --wave, "{gate_wave}", --eval-stdin, --json]
+    stdin: '{"coverage":{coverage},"depth":{depth},"sources":{sources},"actionability":{actionability},"gaps":{gaps}}'
+    ok_exit: [0, 1]
+    outputs_from: stdout_json
+    outputs: [opened, verdict]
+
+  merge:
+    type: command
+    argv: [chb, swarm-merge, --json]
+    outputs_from: stdout_json
+
+  detect-conflicts:
+    type: command
+    argv: [chb, detect-conflicts, --json]
+    outputs_from: stdout_json
+
+  # should_continue is computed, not judged: another pass while the hive has
+  # run fewer than max_iterations passes and the last two did not both leave
+  # the research state as they found it. --expect-iteration refuses a pass
+  # whose count moved after the scan, so each pass counts once.
+  complete-iteration:
+    type: command
+    argv: [chb, hive, complete, --project, "{project}", --action, all, --max-iterations, "{max_iterations}", --expect-iteration, "{iteration}", --json]
+    outputs_from: stdout_json
+    outputs: [should_continue, stop_reason]
+
+  loop-decision:
+    type: decision
+    condition: "should_continue == true"
+    true_edge: scan
+    false_edge: report
+
+  # What the synthesis reads, gathered by chb, so the model writing it needs
+  # no tools.
+  report:
+    type: command
+    argv: [chb, hive, report, --project, "{project}", --max-iterations, "{max_iterations}", --since-iteration, "{start_iteration}"]
+    outputs_from: stdout_json
+    outputs: [phase, iteration, stop_reason, passes_this_run, summary, findings_total, findings, open_gaps, open_conflicts]
+
+  final-synthesis:
+    type: agent
+    agent: analyst
+    role: hive-synthesis
+    tier: planner
+    tools: []
+    prompt: |
+      Write the final synthesis of the hive's research on project '{project}',
+      from the state below.
+
+      The hive has run {iteration} pass(es), {passes_this_run} of them in this
+      run. Phase: {phase}. It stopped because: {stop_reason}
+      Summary (counts, labels, coverage, the latest evaluation): {summary}
+      Findings, the most converged first ({findings_total} in all), as JSON:
+        {findings}
+      Open gaps, as JSON: {open_gaps}
+      Open conflicts, as JSON: {open_conflicts}
+
+      In report_markdown, write the synthesis as Markdown: what the hive
+      established, grouped by theme, with each claim citing its finding ids
+      and keeping its MSS label; where the findings disagree; and what is
+      still unknown, and why the findings cannot settle it. A claim with no
+      finding behind it has no place here. Leave the open questions out of
+      the Markdown: chb adds them under their own heading.
+
+      In open_questions, list the questions still open, one per entry, most
+      important first.
+
+      Answer with the JSON object alone, exactly:
+      {"report_markdown":"<the synthesis, as Markdown>","open_questions":["<an open question>"]}
+    outputs: [report_markdown, open_questions]
+    output_schema:
+      type: object
+      additionalProperties: false
+      required: [report_markdown, open_questions]
+      properties:
+        report_markdown: {type: string, minLength: 1}
+        open_questions:
+          type: array
+          maxItems: 10
+          items: {type: string, minLength: 1}
+    accept:
+      - "outputs.report_markdown != ''"
+    on_reject:
+      max_repair_iterations: 1
+
+  # chb writes the synthesis file from the model's answer, so a synthesis
+  # that never arrives writes no file, and one that does always lands.
+  write-synthesis:
+    type: command
+    argv: [chb, hive, write-synthesis, --project, "{project}", --out, "workspace/{project}/final-synthesis.md", --open-questions, "{open_questions}"]
+    stdin: "{report_markdown}"
+    outputs_from: stdout_json
+    outputs: [path]
+
+  export-graph:
+    type: command
+    argv: [chb, export-graph, --out, "workspace/{project}/graph.json"]
+
+edges:
+  - from: init
+    to: scan
+  - from: scan
+    to: check-terminal
+  - from: check-terminal
+    to: report
+    condition: "phase == 'terminal' or phase == 'capped'"
+  - from: check-terminal
+    to: check-has-actions
+    condition: "phase != 'terminal' and phase != 'capped'"
+  - from: check-has-actions
+    to: dispatch
+    condition: "len(research_actions) > 0"
+  - from: check-has-actions
+    to: check-gate
+    condition: "len(research_actions) == 0"
+  - from: dispatch
+    to: check-gate
+  - from: check-gate
+    to: validate-sources
+    condition: "gate_requested == true"
+  - from: check-gate
+    to: merge
+    condition: "gate_requested != true"
+  - from: validate-sources
+    to: gate-state
+  - from: gate-state
+    to: evaluate
+  - from: evaluate
+    to: gate
+  - from: gate
+    to: merge
+  - from: merge
+    to: detect-conflicts
+  - from: detect-conflicts
+    to: complete-iteration
+  - from: complete-iteration
+    to: loop-decision
+  - from: loop-decision
+    to: scan
+    condition: "should_continue == true"
+  - from: loop-decision
+    to: report
+    condition: "should_continue != true"
+  - from: report
+    to: final-synthesis
+  - from: final-synthesis
+    to: write-synthesis
+  - from: write-synthesis
+    to: export-graph

@@ -1,0 +1,52 @@
+# HIVE Review Report
+
+**Date:** << .Date >>
+<<- if .HasMeta >>
+<< if .Meta.Workflow >>**Workflow:** `<< .Meta.Workflow >>`<< if .Meta.RunID >> (run id << .Meta.RunID >>)<< end >><< end >>
+<< if .Meta.Provider >>**Provider:** << .Meta.Provider >><< end >>
+<<- end >>
+<< if .HasTokens >>**Cost:** $<< printf "%.4f" .Meta.CostUSD >> across << thousands .TotalTokens >> tokens (in << thousands .Meta.TokensIn >> / out << thousands .Meta.TokensOut >>)
+<< end >>
+**Verdict:** << .Verdict >> — << .TotalFindings >> findings (<< index .Totals "critical" >> critical / << index .Totals "high" >> high / << index .Totals "medium" >> medium / << index .Totals "low" >> low)
+
+## Lens coverage
+
+| Lens | Status | Findings |
+|------|--------|----------|
+<< range .LensRows >>| << .Lens >> | ✅ << .Verdict >> | << .Count >> |
+<< end >><< range .ParseFailures >>| << . >> | ❌ rejected (no JSON / accept failed) | — |
+<< end >>
+## Top high-severity findings (act on these first)
+
+<< if .HighFindings >>| Severity | Location | Issue | Fix |
+|----------|----------|-------|-----|
+<< range .HighFindings >>| << .Severity >> | << loc . >> | << .Issue >> | << .Fix >> |
+<< end >><< else >>_None — every audit returned medium or lower severity._
+<< end >>
+## All findings by lens
+<< range .LensSections >>
+### << .Lens >>  *(verdict: << .Verdict >>)*
+
+<< if .Summary >>_<< .Summary >>_
+
+<< end >><< if .Findings >>| Severity | Location | Issue | Fix |
+|----------|----------|-------|-----|
+<< range .Findings >>| << .Severity >> | << loc . >> | << .Issue >> | << .Fix >> |
+<< end >><< else >>(no findings)
+<< end >><< end >>
+<< if .ParseFailures >>## Rejected audits
+
+These nodes' text did not hold the JSON contract: either the model produced prose without JSON, or the JSON did not include the required `lens` field. Whether an `accept:` predicate refused it or an `on_reject:` repair retried it is outside what this report can see (below).
+
+<< range .ParseFailures >>- `<< . >>`
+<< end >><< end >>
+## How this report was produced
+
+This report is rendered from `workflow_node_states.rationale` — one row per
+audit node, written by the run — and from the parse failures listed above, if
+any. That is the whole of what the renderer inspected.
+
+It does **not** verify the run's machinery. Whether `accept:` rejected anything,
+whether a repair ran and what preflight checked are all outside what this file can see:
+they are capabilities of the pipeline, not findings of this report. For the run's own
+record, read `workflow_repairs`, `workflow_decisions` and the per-node metrics.

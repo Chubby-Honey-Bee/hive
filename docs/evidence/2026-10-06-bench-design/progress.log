@@ -1,0 +1,21 @@
+== 2026-10-06 12:10:33 waiting for the GPU (direct-voice arms under dv-rule)
+== 2026-10-06 16:00:15 smoke start (intervals, both arms) at 1fb617a with chb from f00f806
+== 2026-10-06 16:06:27 smoke exit=0
+== 2026-10-06 16:06:27 full run start (12 tasks)
+== 2026-10-06 16:31:25 chunk 1 start:     task_names: [cache-lru, cache-ttl]
+== 2026-10-06 16:48:30 chunk 1 exit=0
+== 2026-10-06 16:48:38 chunk 2 start:     task_names: [kv-sections, kv-quoted]
+== 2026-10-06 17:10:18 chunk 2 exit=0
+== 2026-10-06 17:10:48 chunk 3 start:     task_names: [cli-wc, cli-head]
+== 2026-10-06 17:33:16 chunk 3 exit=0
+== 2026-10-06 17:33:25 chunk 4 start:     task_names: [ratelimit, retry]
+== 2026-10-06 17:49:15 chunk 4 exit=0
+== 2026-10-06 17:49:23 chunk 5 start:     task_names: [slug-ascii, slug-unicode]
+== 2026-10-06 18:25:40 one-task run start: slug-ascii
+== 2026-10-06 19:14:46 one-task run start: slug-ascii (checkout 467320b, chb built from 467320b, profile local-fast)
+== 2026-10-06 19:20:12 note (written after the start line above): the earlier chunk 5 (started 17:49:23, slug-ascii+slug-unicode) and the earlier one-task slug-ascii run (started 18:25:40) were stopped by the supervising tooling, not by the benchmark; chunk 5 had finished both arms of slug-ascii (designer 6/6, control 6/6, both audits false) and was inside slug-unicode; the one-task run had printed its header only; neither wrote rows, since results.jsonl is written when a case ends
+== 2026-10-06 19:40:39 one-task run slug-ascii exit=0
+== 2026-10-06 19:41:05 one-task run start: slug-unicode (checkout 467320b, chb built from 467320b, profile local-fast)
+== 2026-10-06 20:08:11 one-task run slug-unicode exit=0
+== 2026-10-06 20:08:26 one-task run start: table (checkout 467320b, chb built from 467320b, profile local-fast)
+== 2026-10-06 20:52:54 one-task run table exit=0

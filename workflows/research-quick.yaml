@@ -1,0 +1,52 @@
+name: research-quick
+description: "Single-wave research for low-cost, low-latency questions. 3 angles fanned out on the worker tier, integrated by a synthesist-tier writer. No evaluator, no second wave, no gate. Use this when the question is well-scoped and you'd rather have a $0.20–0.50 answer in 2–4 minutes than a $1–4 answer in 10–15."
+version: 1
+
+# Indicative cost on standard mode (claude-cli):
+#   • Decompose (1 sonnet synthesist call)    ~$0.05
+#   • 3-angle wave (3 haiku worker calls)     ~$0.10
+#   • Synthesize (1 sonnet synthesist call)   ~$0.20
+#   Total                                     ~$0.35 typical
+#
+# On --budget-mode free this drops to ~$0.10 (gpt-5-mini workers + gpt-5.2
+# synthesist). Use research-deep.yaml when you actually need 8 angles +
+# evaluation + conditional gap-filling + opus synthesis.
+
+inputs:
+  - topic
+
+nodes:
+  decompose:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: "Decompose this topic into exactly 3 distinct, non-overlapping research angles — the smallest set that covers the question well. Topic: {topic}. Return as a numbered list, one sentence per angle."
+    outputs: [research_angles]
+    accept:
+      - "outputs.research_angles != ''"
+
+  research:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt_template: "Research this specific angle of {topic}: {item}. Aim for 200–400 words: specific names, numbers, comparisons, open-access citations. Write in your own words — at most one short quote (under 15 words) per source, then cite and move on. Be concise — this feeds a synthesizer."
+    fan_source: research_angles
+    fan_placeholder: "{item}"
+    outputs: [findings]
+    accept:
+      - "outputs.findings != ''"
+
+  synthesize:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: "Synthesize the research on {topic}. Findings: {findings}. Lead with the direct answer, then 2–4 supporting points with citations, then 1 sentence on what's still uncertain. Target ≤500 words. Include source DOIs / URLs inline."
+    outputs: [final_synthesis]
+    accept:
+      - "outputs.final_synthesis != ''"
+
+edges:
+  - from: decompose
+    to: research
+  - from: research
+    to: synthesize

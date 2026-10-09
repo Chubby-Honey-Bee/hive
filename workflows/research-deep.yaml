@@ -1,0 +1,136 @@
+name: research-deep
+description: "Multi-wave evaluation-driven research with conditional gap-filling. Uses progressive cost tiers — planner for decompose/synthesize, synthesist for evaluation, worker for parallel-fan leaves. Pair with --budget-mode (premium / standard / free) to dial cost without editing the workflow."
+version: 2
+
+# Cost / depth notes:
+#   Each node uses `tier:` instead of `model:` so --budget-mode picks
+#   the right model. Concretely:
+#     • planner     — decompose + synthesize (top-quality reasoning)
+#     • synthesist  — evaluate + re-evaluate (mid-tier integration)
+#     • worker      — parallel_fan researchers (cheap, fan-out leaves)
+#   `chb models tiers` shows each mode; Copilot premium-request
+#   multipliers come from `chb models list`:
+#     standard (default)  planner sonnet 1×, synthesist haiku 0.33×,
+#                         worker haiku 0.33×
+#     premium             planner opus 15×, synthesist sonnet 1×,
+#                         worker haiku 0.33×
+#   Cheap mode runs haiku in every slot; free mode uses GPT-5 models.
+#
+# Indicative cost on premium mode for an 8-angle topic via claude-cli:
+#   • Wave 1 fan-out (8 × haiku worker)  ~$0.30
+#   • Evaluate (sonnet synthesist)       ~$0.15
+#   • Wave 2 fan-out if triggered        ~$0.20
+#   • Re-evaluate (sonnet synthesist)    ~$0.15
+#   • Synthesize (opus planner)          ~$0.50
+#   Total                                ~$1.30 typical, vs. $4.00–4.50 when
+#                                         every node ran on opus/sonnet.
+# Standard mode moves evaluate and re-evaluate to haiku (1/3 of sonnet's
+# $/1M) and synthesize to sonnet (1/5 of opus's $/1M). At the same token
+# counts that is ~$0.05 + ~$0.05 + ~$0.10, so ~$0.70 in total.
+
+inputs:
+  - topic
+
+nodes:
+  decompose:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: "Decompose this research topic into 5-8 distinct, non-overlapping research angles. Topic: {topic}. For each angle, provide a one-sentence research question. Return as a numbered list."
+    outputs: [research_angles]
+    accept:
+      - "outputs.research_angles != ''"
+
+  research-wave1:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt_template: "Research this specific angle of {topic}: {item}. Go deep — specific names, numbers, comparisons, citations preferring open-access DOIs. Not Wikipedia-grade. Paraphrase in your own words; at most one short quote per source and never 15+ words verbatim from any single source. Attribute every claim (According to <source>…) and link it so readers can go deeper. Summarize a source at a high level — don't reconstruct its structure point-by-point."
+    fan_source: research_angles
+    fan_placeholder: "{item}"
+    outputs: [wave1_findings]
+    accept:
+      - "outputs.wave1_findings != ''"
+
+  evaluate:
+    type: agent
+    agent: evaluator
+    tier: synthesist
+    prompt: >
+      Evaluate research completeness for topic: {topic}. Wave 1 findings: {wave1_findings}.
+      Check: coverage (all angles addressed?), depth (actionable specifics?),
+      conflicts (contradictions?), gaps (what's missing?). Rate coverage 1-5.
+      Each gap you list becomes one Wave 2 research call.
+
+      Return JSON exactly:
+        {"eval_verdict":"COMPLETE|NEEDS_MORE_WORK|NEEDS_MINOR_FOLLOWUP",
+         "eval_coverage":<coverage from 1 to 5, as a number>,
+         "gaps":["<one specific missing piece per entry; empty list if COMPLETE>"],
+         "conflicts":"<the contradictions you found, or none>"}
+    outputs: [eval_verdict, eval_coverage, gaps, conflicts]
+    accept:
+      - "outputs.eval_verdict != ''"
+      - "outputs.gaps != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  check-complete:
+    type: decision
+    condition: "eval_verdict == 'COMPLETE'"
+    true_edge: synthesize
+    false_edge: research-wave2
+
+  research-wave2:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt_template: "Fill this specific research gap about {topic}: {item}. Surgical answer, sources cited (open-access preferred), no padding. Paraphrase in your own words; at most one short quote per source, never 15+ words verbatim, and don't reproduce a source's structure point-by-point."
+    fan_source: gaps
+    fan_placeholder: "{item}"
+    outputs: [wave2_findings]
+    accept:
+      - "outputs.wave2_findings != ''"
+
+  re-evaluate:
+    type: agent
+    agent: evaluator
+    tier: synthesist
+    prompt: "Re-evaluate research completeness after Wave 2. Topic: {topic}. Wave 1: {wave1_findings}. Wave 2: {wave2_findings}. Conflicts from W1: {conflicts}. Are gaps filled? New conflicts? Set eval_verdict."
+    outputs: [eval_verdict]
+    accept:
+      - "outputs.eval_verdict != ''"
+
+  check-complete-2:
+    type: decision
+    condition: "eval_verdict == 'COMPLETE' or eval_verdict == 'NEEDS_MINOR_FOLLOWUP'"
+    true_edge: synthesize
+    false_edge: synthesize
+
+  synthesize:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: "Synthesize all research on: {topic}. Wave 1 findings: {wave1_findings}. Wave 2 findings: {wave2_findings}. Known conflicts: {conflicts}. Structure by theme (not by agent). Lead with key conclusions, then supporting detail. Keep each material claim tied to the source it came from. Where sources disagree, present both sides rather than picking a winner. Flag remaining uncertainties and don't assert beyond what the findings support. Include all sources."
+    outputs: [final_synthesis]
+    accept:
+      - "outputs.final_synthesis != ''"
+
+edges:
+  - from: decompose
+    to: research-wave1
+  - from: research-wave1
+    to: evaluate
+  - from: evaluate
+    to: check-complete
+  - from: check-complete
+    to: synthesize
+    condition: "eval_verdict == 'COMPLETE'"
+  - from: check-complete
+    to: research-wave2
+    condition: "eval_verdict != 'COMPLETE'"
+  - from: research-wave2
+    to: re-evaluate
+  - from: re-evaluate
+    to: check-complete-2
+  - from: check-complete-2
+    to: synthesize

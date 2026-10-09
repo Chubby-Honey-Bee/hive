@@ -1,0 +1,435 @@
+# Source-of-truth config for every model the runner knows about.
+#
+# Five sections:
+#
+#   models:  per-model pricing ($/1M tokens) + Copilot premium-request
+#            multiplier + family. Used by the cost meter.
+#   tiers:   per-role × per-budget-mode model selection. Used by the
+#            workflow engine when a node sets `tier:` instead of `model:`.
+#   aliases: short names that resolve to canonical model ids. Used so a
+#            workflow can write `model: sonnet` and get the right
+#            per-provider model id at dispatch time.
+#   hive_tiers: the hive's model-tier ladder, cheapest first.
+#   profiles: named routing profiles (--profile, HIVE_PROFILE): each
+#            maps the roles a workflow node names with `role:` to a
+#            model, provider, reasoning level, tools and TTL, and its
+#            default route serves the nodes no role routes.
+#
+# This file ships embedded in the binary (internal/models/embed.go).
+# Users can override any subset by writing
+# ~/.config/hive/models.yaml — the loader merges user entries on
+# top of the defaults so partial overrides are safe (e.g. you only
+# need to ship a `models.gpt-5.6` entry to add a new model without
+# re-specifying every existing one).
+#
+# Cost dial:
+#   premium  → tier.premium  slot
+#   standard → tier.standard slot   (default — middle gear)
+#   cheap    → tier.cheap    slot
+#   free     → tier.free     slot
+#
+# Last updated: 2026-09-28 (the Claude and Gemini prices, read that day)
+
+last_updated: "2026-09-28"
+
+# ─── Model pricing & metadata ─────────────────────────────────────
+models:
+  # ── anthropic ──
+  # Prices from Anthropic's pricing page (platform.claude.com/docs/en/about-claude/pricing,
+  # read 2026-09-28; the page carries no date): base input, output, cache
+  # hits (cached_input_per_mtok_usd), 5-minute cache writes
+  # (cache_write_per_mtok_usd) and 1-hour cache writes
+  # (cache_write_1h_per_mtok_usd). The Claude CLI reports cache reads and
+  # writes apart from uncached input, and names each model it called
+  # (runner.md § Per-node persistence and cost). claude-opus-5 and
+  # claude-sonnet-5 are what its `opus` and `sonnet` aliases call (Claude
+  # Code 2.1.236), and claude-opus-5-5 and claude-sonnet-5-5 are the current
+  # lineup, so those calls are priced. For these four, copilot_multiplier is
+  # the 1.0 chb gives a model it does not list, not a checked Copilot rate,
+  # and max_output_tokens follows the entry each succeeds, below the 128K
+  # the API allows.
+  claude-opus-5-5:
+    family: anthropic
+    input_per_mtok_usd: 4.00
+    cached_input_per_mtok_usd: 0.20
+    cache_write_per_mtok_usd: 5.00
+    cache_write_1h_per_mtok_usd: 8.00
+    output_per_mtok_usd: 20.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 32768
+  claude-opus-5:
+    family: anthropic
+    input_per_mtok_usd: 5.00
+    cached_input_per_mtok_usd: 0.50
+    cache_write_per_mtok_usd: 6.25
+    cache_write_1h_per_mtok_usd: 10.00
+    output_per_mtok_usd: 25.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 32768
+  claude-opus-4-8:
+    family: anthropic
+    input_per_mtok_usd: 5.00
+    cached_input_per_mtok_usd: 0.50
+    cache_write_per_mtok_usd: 6.25
+    cache_write_1h_per_mtok_usd: 10.00
+    output_per_mtok_usd: 25.00
+    copilot_multiplier: 15.0
+    max_output_tokens: 32768
+  claude-opus-4-6:
+    family: anthropic
+    input_per_mtok_usd: 5.00
+    cached_input_per_mtok_usd: 0.50
+    cache_write_per_mtok_usd: 6.25
+    cache_write_1h_per_mtok_usd: 10.00
+    output_per_mtok_usd: 25.00
+    copilot_multiplier: 3.0
+    max_output_tokens: 32768
+  claude-opus-4-5-20250514:
+    family: anthropic
+    input_per_mtok_usd: 5.00
+    cached_input_per_mtok_usd: 0.50
+    cache_write_per_mtok_usd: 6.25
+    cache_write_1h_per_mtok_usd: 10.00
+    output_per_mtok_usd: 25.00
+    copilot_multiplier: 3.0
+    max_output_tokens: 32768
+  claude-sonnet-5-5:
+    family: anthropic
+    input_per_mtok_usd: 2.00
+    cached_input_per_mtok_usd: 0.20
+    cache_write_per_mtok_usd: 2.50
+    cache_write_1h_per_mtok_usd: 4.00
+    output_per_mtok_usd: 10.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 65536
+  claude-sonnet-5:
+    family: anthropic
+    input_per_mtok_usd: 2.00
+    cached_input_per_mtok_usd: 0.20
+    cache_write_per_mtok_usd: 2.50
+    cache_write_1h_per_mtok_usd: 4.00
+    output_per_mtok_usd: 10.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 65536
+  claude-sonnet-4-6:
+    family: anthropic
+    input_per_mtok_usd: 3.00
+    cached_input_per_mtok_usd: 0.30
+    cache_write_per_mtok_usd: 3.75
+    cache_write_1h_per_mtok_usd: 6.00
+    output_per_mtok_usd: 15.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 65536
+  claude-sonnet-4-5:
+    family: anthropic
+    input_per_mtok_usd: 3.00
+    cached_input_per_mtok_usd: 0.30
+    cache_write_per_mtok_usd: 3.75
+    cache_write_1h_per_mtok_usd: 6.00
+    output_per_mtok_usd: 15.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 65536
+  claude-haiku-4-5:
+    family: anthropic
+    input_per_mtok_usd: 1.00
+    cached_input_per_mtok_usd: 0.10
+    cache_write_per_mtok_usd: 1.25
+    cache_write_1h_per_mtok_usd: 2.00
+    output_per_mtok_usd: 5.00
+    copilot_multiplier: 0.33
+    max_output_tokens: 8192
+  claude-haiku-4-5-20251001:
+    family: anthropic
+    input_per_mtok_usd: 1.00
+    cached_input_per_mtok_usd: 0.10
+    cache_write_per_mtok_usd: 1.25
+    cache_write_1h_per_mtok_usd: 2.00
+    output_per_mtok_usd: 5.00
+    copilot_multiplier: 0.33
+    max_output_tokens: 8192
+
+  # ── google / gemini ──
+  # cached_input_per_mtok_usd: the context-caching price, text, prompts
+  # up to 200k tokens (ai.google.dev/gemini-api/docs/pricing, last updated
+  # 2026-09-24, read 2026-09-28). A model with none prices a cached token
+  # at its input price.
+  gemini-2.5-pro:
+    family: google
+    input_per_mtok_usd: 1.25
+    cached_input_per_mtok_usd: 0.125
+    output_per_mtok_usd: 10.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 65536
+  gemini-2.5-flash:
+    family: google
+    input_per_mtok_usd: 0.30
+    cached_input_per_mtok_usd: 0.03
+    output_per_mtok_usd: 2.50
+    copilot_multiplier: 0.33
+    max_output_tokens: 65536
+  gemini-2.5-flash-lite:
+    family: google
+    input_per_mtok_usd: 0.10
+    cached_input_per_mtok_usd: 0.01
+    output_per_mtok_usd: 0.40
+    copilot_multiplier: 0.33
+    max_output_tokens: 16384
+
+  # ── openai ──
+  gpt-5.5:
+    family: openai
+    input_per_mtok_usd: 5.00
+    output_per_mtok_usd: 20.00
+    copilot_multiplier: 7.5
+    max_output_tokens: 16384
+  gpt-5.4:
+    family: openai
+    input_per_mtok_usd: 3.00
+    output_per_mtok_usd: 12.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 16384
+  gpt-5.4-mini:
+    family: openai
+    input_per_mtok_usd: 0.60
+    output_per_mtok_usd: 2.40
+    copilot_multiplier: 0.33
+    max_output_tokens: 16384
+  gpt-5.3-codex:
+    family: openai
+    input_per_mtok_usd: 3.00
+    output_per_mtok_usd: 12.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 16384
+  gpt-5.2:
+    family: openai
+    input_per_mtok_usd: 3.00
+    output_per_mtok_usd: 12.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 16384
+  gpt-5.2-codex:
+    family: openai
+    input_per_mtok_usd: 3.00
+    output_per_mtok_usd: 12.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 16384
+  gpt-5.1:
+    family: openai
+    input_per_mtok_usd: 3.00
+    output_per_mtok_usd: 12.00
+    copilot_multiplier: 1.0
+    max_output_tokens: 16384
+  gpt-5.1-pro:
+    family: openai
+    input_per_mtok_usd: 15.00
+    output_per_mtok_usd: 60.00
+    copilot_multiplier: 3.0
+    max_output_tokens: 32768
+  gpt-5.1-mini:
+    family: openai
+    input_per_mtok_usd: 0.60
+    output_per_mtok_usd: 2.40
+    copilot_multiplier: 0.33
+    max_output_tokens: 16384
+  gpt-5-mini:
+    family: openai
+    input_per_mtok_usd: 0.30
+    output_per_mtok_usd: 1.20
+    copilot_multiplier: 0.0
+    max_output_tokens: 16384
+  gpt-4.1:
+    family: openai
+    input_per_mtok_usd: 2.00
+    output_per_mtok_usd: 8.00
+    copilot_multiplier: 0.0
+    max_output_tokens: 16384
+  gpt-4o:
+    family: openai
+    input_per_mtok_usd: 2.50
+    output_per_mtok_usd: 10.00
+    copilot_multiplier: 0.0
+    max_output_tokens: 16384
+  gpt-4o-mini:
+    family: openai
+    input_per_mtok_usd: 0.15
+    output_per_mtok_usd: 0.60
+    copilot_multiplier: 0.0
+    max_output_tokens: 16384
+
+# ─── Tier roles × budget modes ────────────────────────────────────
+#
+# Each tier has five model slots. Empty slots gracefully degrade:
+#   standard → premium    (when standard slot is unset)
+#   cheap    → standard   (when cheap slot is unset)
+#   fallback → primary    (when fallback slot is unset)
+#   free     → primary    (when free slot is unset)
+#
+# Roles:
+#   planner    — decompose, route, decide structure (top-tier reasoning)
+#   synthesist — aggregate, evaluate, gate (mid-tier integration)
+#   worker     — fan-out leaf execution (cheap fast model)
+#   verifier   — code-tuned mechanical checks (codex-aware default)
+tiers:
+  planner:
+    premium: claude-opus-4-8
+    standard: claude-sonnet-4-6
+    cheap: claude-haiku-4-5
+    fallback: claude-opus-4-6
+    free: gpt-5.5
+  synthesist:
+    premium: claude-sonnet-4-6
+    standard: claude-haiku-4-5
+    cheap: claude-haiku-4-5
+    fallback: gemini-2.5-pro
+    free: gpt-5.2
+  worker:
+    premium: claude-haiku-4-5
+    standard: claude-haiku-4-5
+    cheap: claude-haiku-4-5
+    fallback: gpt-5.4-mini
+    free: gpt-5-mini
+  verifier:
+    premium: gpt-5.3-codex
+    standard: claude-sonnet-4-6
+    cheap: claude-haiku-4-5
+    fallback: claude-sonnet-4-6
+    free: gpt-5-mini
+
+# ─── Aliases (workflow YAML shorthand → canonical id) ─────────────
+#
+# Lets a workflow author write `model: sonnet` and get the right
+# per-provider model id at dispatch time. Aliases are case-insensitive
+# and trimmed.
+aliases:
+  haiku: claude-haiku-4-5
+  sonnet: claude-sonnet-4-6
+  opus: claude-opus-4-8
+  pro: gemini-2.5-pro
+  flash: gemini-2.5-flash
+
+# ─── The hive's model-tier ladder ─────────────────────────────────
+#
+# Cheapest first. The hive's tier rule moves hive_state.model_tier one
+# rung up while unknowns dominate the latest wave, at most once per two
+# scans, and one rung back after three scans in a row on which unknowns are
+# at most a quarter of it; `chb hive init` starts at the middle rung
+# (rounding down). Under a routing profile the ladder is the profile's
+# hive_tiers, else its hive-research model alone.
+hive_tiers: [haiku, sonnet, opus]
+
+# ─── Routing profiles ─────────────────────────────────────────────
+#
+# `chb ask|agent-run|preflight|review|implement|proof|agent-harness
+# --profile <name>` (or HIVE_PROFILE) routes every workflow node that
+# names a `role:` as its role's entry says: model (required), provider,
+# reasoning (none|low|medium|high), tools (a list; [] gives none) and ttl
+# (the bound on each call, a Go duration). A field left out keeps what the
+# node declares. The profile's `provider:` serves a role that names none,
+# and is the run's default provider.
+#
+# `default:` is a route of the same shape for every model node that no role
+# route serves and that names no model and no provider of its own, such as
+# a node that names only a `tier:`: the shipped workflows whose nodes name
+# no role, and workflows of your own. It stays on this machine. A node that
+# names a model or a provider of its own, and no role the profile routes,
+# runs as written.
+#
+# Roles: scope, lens, evaluate, followup, queen (chb ask); hive-research,
+# evaluate, hive-synthesis (workflows/hive.yaml); review-lens,
+# review-synthesis (chb review); implement-plan, implement-fix,
+# implement-repair (chb implement; the repair role is the fix nodes'
+# on_reject model).
+#
+# `provider: local` is the OpenAI-compatible server at
+# HIVE_LOCAL_BASE_URL (default http://localhost:11434/v1, Ollama). A
+# route is local only on `provider: local` with a model that is not an
+# Ollama cloud tag (`:cloud`, `-cloud`); `provider: openai` is a cloud route
+# even at a localhost OPENAI_BASE_URL. Any other route leaves this machine
+# and must say why in `because:`, naming the measured evidence that no local
+# model is sufficient for the role (a Bench-1 report); chb checks that it is
+# there, not what it says. A cloud route lets only its own role leave: a
+# profile refuses a run in which any other call would send data off the
+# machine. Every run and `chb preflight` print the routing.
+#
+# These three come from Bench-0 (Ollama 0.34.4, 2026-09-25): with the
+# schema enforced at decode and thinking off (reasoning none), every call
+# gave schema-valid output; qwen3.6:35b-a3b-q4_K_M answered in a median of
+# 5 s (max 26 s) and qwen3.5:4b in 6.6 s (max 10.3 s). That measured the
+# shape and the speed of single calls, not the quality of the answers, and
+# no tool loop. The roles that run one (hive-research, review-lens,
+# review-synthesis, implement-fix), and the default route, whose nodes keep
+# their tools, are routed on that bet.
+#
+# A cloud fallback for one role goes in ~/.config/hive/models.yaml. A
+# profile there replaces the shipped one of the same name whole, so copy
+# its default route and every role and change the one. The Anthropic API
+# needs ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN), or the run is refused
+# before it starts:
+#
+#   profiles:
+#     local-small-cloud-queen:
+#       description: local-small, with Queen on the Anthropic API
+#       quality: unvalidated
+#       provider: local
+#       default: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+#       roles:
+#         # ...every other role as local-small has it...
+#         queen:
+#           model: claude-opus-4-8
+#           provider: anthropic
+#           tools: []
+#           because: "Bench-1 <report>: qwen3.6:35b-a3b-q4_K_M Queen failed non-inferiority at δ=0.15"
+profiles:
+  local-fast:
+    description: qwen3.6:35b-a3b-q4_K_M in every role and on every node no role routes, thinking off, on this machine
+    quality: measured by Bench-1 on 2026-10-01 (4 seeds, 56 items per arm, Ollama 0.35.0); on closed roster questions the swarm scored 0.82 and one call of the same model 0.95, so it is not the more accurate way to answer one; its quorum is calibrated, a verdict the Queen called high convergence was right 26 of 26 times and a lens tie 0 of 5; about 2.5 min a swarm on Bench-1's short items and 2 to 7 min on an open question (runs on 2026-10-06 and 2026-10-08), longer while the machine is busy
+    provider: local
+    default: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+    roles:
+      scope: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      lens: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      evaluate: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      followup: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      queen: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      hive-research: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      hive-synthesis: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      review-lens: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      review-synthesis: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      implement-plan: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      implement-fix: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      implement-repair: {model: qwen3.6:35b-a3b-q4_K_M}
+  local-small:
+    description: qwen3.5:4b lenses and follow-ups; qwen3.6:35b-a3b-q4_K_M for scope, evaluate, Queen, every tool-driving role and every node no role routes; thinking off, on this machine
+    quality: measured by Bench-1 on 2026-10-01; on closed roster questions the swarm scored 0.59 and one call of the Queen's model 0.79; the 4b lenses err together (0.49 of error pairs against 0.38 by chance), so their quorum is not calibrated (high convergence right 5 of 7); use it for coverage and the audit trail, not for a verdict
+    provider: local
+    default: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+    roles:
+      scope: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      lens: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      evaluate: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      followup: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      queen: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      hive-research: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      hive-synthesis: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, tools: [], ttl: 5m}
+      review-lens: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      review-synthesis: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      implement-plan: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      implement-fix: {model: qwen3.6:35b-a3b-q4_K_M, reasoning: none, ttl: 5m}
+      implement-repair: {model: qwen3.6:35b-a3b-q4_K_M}
+  local-8gb:
+    description: qwen3.5:4b (3.4 GB) in every role and on every node no role routes, thinking off, for a machine with 8 GB
+    quality: measured on 2026-09-29 by the quick screen (one seed, 14 items per arm, on a 64 GB M1 Max rather than an 8 GB machine; Bench-1 did not run this configuration); on closed roster questions the swarm scored 0.64 and one call of the same model 0.71, and the lenses err together (0.43 of error pairs against 0.36 by chance); Bench-1 found every small-model quorum uncalibrated, so use this profile for coverage and the audit trail, not for a verdict
+    provider: local
+    default: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+    roles:
+      scope: {model: qwen3.5:4b, reasoning: none, tools: [], ttl: 5m}
+      lens: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      evaluate: {model: qwen3.5:4b, reasoning: none, tools: [], ttl: 5m}
+      followup: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      queen: {model: qwen3.5:4b, reasoning: none, tools: [], ttl: 5m}
+      hive-research: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      hive-synthesis: {model: qwen3.5:4b, reasoning: none, tools: [], ttl: 5m}
+      review-lens: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      review-synthesis: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      implement-plan: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      implement-fix: {model: qwen3.5:4b, reasoning: none, ttl: 5m}
+      implement-repair: {model: qwen3.5:4b}

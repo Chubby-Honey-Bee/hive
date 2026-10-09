@@ -1,0 +1,63 @@
+name: Lean Build
+
+# Compiles the lean4/ proof tree with `lake build`, then runs the gate in
+# lean4/Checks.lean. A compile error fails CI. The gate walks the elaborated
+# environment of the five libraries and fails on (a) any theorem whose
+# conclusion is `True`, with no allowlist, and (b) any declaration that
+# depends on `sorryAx` whose module is not named in LEAN_SORRY_ALLOW. It
+# reads types and axiom sets, not source text, so formatting cannot dodge
+# it, and it prints every sorry it sees, so its log is also the report.
+#
+# LEAN_SORRY_ALLOW only shrinks: a module leaves it when its last sorry is
+# discharged and never joins it. It is empty, so a sorry anywhere in the
+# tree fails.
+#
+# No mathlib dependency, so the build is just the toolchain + 5 small
+# libs. Triggered only on lean4/ changes to bound cost. The build runs
+# from clean (no cache), so a "declaration uses 'sorry'" warning cannot
+# hide in a cached .olean either.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lean4/**'
+      - '.github/workflows/lean.yml'
+  pull_request:
+    paths:
+      - 'lean4/**'
+      - '.github/workflows/lean.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lake-build:
+    name: lake build (lean4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: lean4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install elan (Lean toolchain manager)
+        run: |
+          set -e
+          if ! command -v elan >/dev/null 2>&1; then
+            curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+              | sh -s -- -y --default-toolchain "$(cat lean-toolchain)"
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: lake build (compile must succeed)
+        run: lake build
+
+      - name: Lean gate (no `True` conclusion; no `sorry` outside the allowlist)
+        env:
+          # Comma-separated module names still carrying open obligations,
+          # e.g. "WASP.BoundedWork,CDE.Index". Empty: a sorry anywhere fails.
+          LEAN_SORRY_ALLOW: ""
+        run: lake env lean Checks.lean

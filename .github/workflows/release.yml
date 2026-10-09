@@ -1,0 +1,39 @@
+name: Release
+
+# Cuts a GitHub release from .goreleaser.yaml when a vX.Y.Z tag is pushed:
+# chb + chb-mcp for linux/darwin/windows × amd64/arm64, each archive with
+# LICENSE and README.md (the binaries carry foragers/, agents/ and
+# workflows/), and checksums.txt. The binaries report the tag without its
+# v (`chb --version` → `chb version 0.1.0`). The release is created as a
+# draft (see `release:` in .goreleaser.yaml) so the notes can be edited
+# before it goes public. The container image is published separately by
+# publish-image.yml on the same tag.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # goreleaser derives the changelog from tag history
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

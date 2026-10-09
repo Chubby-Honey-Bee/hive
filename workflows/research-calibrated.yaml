@@ -1,0 +1,60 @@
+name: research-calibrated
+description: |
+  Score the hive's track record before a research pass. The calibrate node
+  rolls the outcomes ledger into calibration_scores with no model call. When
+  a calibrated guarantee domain has drifted under the floor, the run stops
+  at a report instead of researching on weak premises; otherwise one
+  worker-tier researcher takes the topic, told which calibrated lens has the
+  weakest record.
+version: 1
+
+inputs:
+  - topic
+
+nodes:
+  # No prompt, no model: calibration.Recompute in the run, under a calibrate
+  # tick. Its outputs are the two the node writes.
+  calibrate:
+    type: calibrate
+    outputs: [calibration_drift_count, lowest_calibrated_lens]
+
+  drifted:
+    type: decision
+    condition: "calibration_drift_count > 0"
+    true_edge: report-drift
+    false_edge: research
+
+  report-drift:
+    type: command
+    argv: [chb, db-read, calibration, --kind, label]
+
+  research:
+    type: agent
+    agent: researcher
+    tier: worker
+    prompt: |
+      Research this topic: {topic}.
+
+      The hive's calibration found no drift in its guarantee domains
+      ({calibration_drift_count} drift reports). The calibrated lens with the
+      weakest track record is "{lowest_calibrated_lens}" (empty when no lens
+      is calibrated yet). Verify any claim that leans on that lens's usual
+      angle against a second source, and confirm negative evidence where you
+      find none: say what does NOT hold.
+
+      Aim for 200-400 words: specific names, numbers, comparisons and
+      open-access citations. Return ONLY this JSON:
+        {"findings": "<your findings>"}
+    outputs: [findings]
+    accept:
+      - "outputs.findings != ''"
+
+edges:
+  - from: calibrate
+    to: drifted
+  - from: drifted
+    to: report-drift
+    condition: "calibration_drift_count > 0"
+  - from: drifted
+    to: research
+    condition: "calibration_drift_count == 0"

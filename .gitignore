@@ -1,0 +1,134 @@
+# Sourced from gitignore.io stacks: Go, Linux, macOS, Windows,
+# VisualStudioCode, JetBrains, Vim, Emacs, Docker. Project-specific
+# additions follow.
+
+# ── Go ────────────────────────────────────────────────────────────────
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+vendor/
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+_testmain.go
+
+# ── Linux ─────────────────────────────────────────────────────────────
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ── macOS ─────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ── Windows ───────────────────────────────────────────────────────────
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# ── VS Code ───────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+# ── JetBrains (IntelliJ / GoLand) ─────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+/out/
+
+# ── Vim ───────────────────────────────────────────────────────────────
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+/tags
+[._]*.un~
+
+# ── Emacs ─────────────────────────────────────────────────────────────
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ── Docker / build artifacts ──────────────────────────────────────────
+.docker/
+
+# ── HIVE build outputs ────────────────────────────────────────────────
+/chb
+/chb-mcp
+dist/
+
+# ── Local research workspaces — never commit ──────────────────────────
+# Per-project state lives under workspace/<project>/. The whole tree is
+# local-only (DBs, findings, per-run logs, ad-hoc artifacts). The
+# placeholder .gitkeep is the only thing this repo tracks under workspace/.
+/workspace/*
+!/workspace/.gitkeep
+
+# ── Tooling caches ────────────────────────────────────────────────────
+__pycache__/
+.cache/
+.coverage
+*.cover
+*.coverprofile
+*.prof
+*.pprof
+
+# ── Editor backups and swap files ─────────────────────────────────────
+*.bak
+*.tmp
+*.orig
+
+# Lean build artifacts
+lean4/.lake/
+lean4/instance/
+

@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a defect in HIVE
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in
+        as much of the form as you can — every field helps us reproduce.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of `chb --version` (or commit SHA if built from source)"
+      placeholder: "chb version 0.1.0  /  commit a1b2c3d"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "macOS 14.4 / Linux x86_64 / Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The minimum sequence that triggers the bug
+      placeholder: |
+        1. chb db-init
+        2. chb ask "..."
+        3. (observe error)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the full error message, stack trace, or unexpected output
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / context (optional)
+      description: Workspace contents, log files, or anything else that helps
+      render: shell

@@ -1,0 +1,122 @@
+[
+  {
+    "name": "architect",
+    "title": "The Architect",
+    "sigil": "⌬",
+    "accent": "#6B8FBF",
+    "default": false,
+    "archetype": "lens"
+  },
+  {
+    "name": "dreamer",
+    "title": "The Dreamer",
+    "sigil": "🜔",
+    "accent": "#7E5DA8",
+    "default": true,
+    "archetype": "dreamer"
+  },
+  {
+    "name": "editor",
+    "title": "The Editor",
+    "sigil": "✎",
+    "accent": "#BDA07C",
+    "default": false,
+    "archetype": "lens"
+  },
+  {
+    "name": "empiricist",
+    "title": "The Empiricist",
+    "sigil": "Δ",
+    "accent": "#5BA8C7",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "forecaster",
+    "title": "The Forecaster",
+    "sigil": "⊹",
+    "accent": "#E7A5C8",
+    "default": false,
+    "archetype": "lens"
+  },
+  {
+    "name": "framer",
+    "title": "The Framer",
+    "sigil": "𓂀",
+    "accent": "#B07AC4",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "historian",
+    "title": "The Historian",
+    "sigil": "☽",
+    "accent": "#C0C0D0",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "optimist",
+    "title": "The Optimist",
+    "sigil": "☉",
+    "accent": "#F2C94C",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "pragmatist",
+    "title": "The Pragmatist",
+    "sigil": "♃",
+    "accent": "#6E9D5C",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "queen",
+    "title": "The Queen",
+    "sigil": "♛",
+    "accent": "#CC2E7A",
+    "default": false,
+    "archetype": "synthesizer"
+  },
+  {
+    "name": "scholar",
+    "title": "The Scholar",
+    "sigil": "⊨",
+    "accent": "#8B6F47",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "skeptic",
+    "title": "The Skeptic",
+    "sigil": "♂",
+    "accent": "#C26B6B",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "steward",
+    "title": "The Steward",
+    "sigil": "♀",
+    "accent": "#A2D29C",
+    "default": false,
+    "archetype": "lens"
+  },
+  {
+    "name": "surveyor",
+    "title": "The Surveyor",
+    "sigil": "☿",
+    "accent": "#9DB4D2",
+    "default": true,
+    "archetype": "lens"
+  },
+  {
+    "name": "timekeeper",
+    "title": "The Timekeeper",
+    "sigil": "♄",
+    "accent": "#6F7390",
+    "default": true,
+    "archetype": "lens"
+  }
+]

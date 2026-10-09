@@ -1,0 +1,54 @@
+# Keep the build context lean. Anything copied into the build is
+# subject to rebuild-cache invalidation, so excluding everything we
+# don't actually need makes incremental builds fast.
+
+# ── VCS / metadata ───────────────────────────────────────────────────
+.git
+.github
+.gitignore
+.gitattributes
+
+# ── Editor / IDE ─────────────────────────────────────────────────────
+.vscode
+.idea
+*.swp
+*~
+
+# ── OS junk ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Build outputs (would clobber stage-1 binaries) ──────────────────
+/chb
+/chb-mcp
+dist/
+*.test
+*.out
+*.exe
+
+# ── Workspace data (per-project SQLite + per-run scratch) ───────────
+# Workspace DBs can be 1–4 MB each; pulling them into the build
+# context bloats the cache and slows every rebuild. Operators mount
+# their own workspace at runtime via -v $HOST:/app/workspace.
+workspace/
+
+# ── Scratch / docs / governance not needed at runtime ───────────────
+docs/
+*.md
+scripts/
+.ruff_cache/
+
+# ── Container infrastructure (don't COPY ourselves) ─────────────────
+Dockerfile
+.dockerignore
+.goreleaser.yaml
+
+# ── Lean 4 — separate verification layer; not needed in runtime ─────
+lean4/
+
+# ── Tooling caches ──────────────────────────────────────────────────
+__pycache__
+.cache
+*.coverprofile
+*.prof
+*.pprof

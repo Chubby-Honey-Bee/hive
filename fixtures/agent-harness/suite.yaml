@@ -1,0 +1,146 @@
+# chb agent-harness suite — the shipped prompts, driven through the local
+# claude CLI, checked against the contracts they declare. Inputs are pinned
+# here; the contracts are what the harness asserts. Run: make harness
+#
+# What it costs. The harness prints each case's cost when it runs or skips
+# it: the model calls it counts from the live roster (swarm and bench
+# cases; one per model node, no repairs), then the case's `cost:` note,
+# which is measured money and time on claude-cli haiku where a run
+# recorded them. `make harness` runs only the cases not marked slow. On a
+# local model every case costs $0, and its time is the model calls times
+# the model's time per call. Bench-0 measured median calls of 5 s
+# (qwen3.6:35b-a3b-q4_K_M) to 28 s (devstral-small-2:24b) with thinking off.
+cases:
+  - name: swarm-minimal
+    kind: swarm
+    cost: about $0.25 and 2.5 min on claude-cli haiku (2026-09-17 and 2026-09-25)
+    question: >-
+      A Go CLI already ships a stdio MCP server. Should it also start an
+      embedded HTTP REST server automatically on MCP initialize, or should the
+      HTTP server be opt-in behind a flag?
+    foragers: minimal
+    eval: false
+
+  # The graded canary, twinned: family F1 of the bench
+  # (docs/specs/bench.md). Does `minimal` leave an orphaned `resonates`
+  # pair? It is asked over the live roster, and over the same roster with
+  # the edit that flips the answer, both passed as the pack in --context.
+  # The answers are computed from the roster on every run, so the case
+  # follows the roster. It fails unless both twins are answered right, so
+  # a model that always gives one verdict fails it.
+  - name: swarm-graded-orphan-twins
+    kind: bench
+    cost: about $0.50 and 5 min on claude-cli haiku, estimated as two swarm-minimal runs
+    families: [F1]
+    seeds: [1]
+    arms: [swarm]
+    foragers: minimal
+    require_pairs: true
+
+  # The profile canary: `make canary PROFILE=local-fast` runs it against a
+  # routing profile after a model or Ollama update, so an update that
+  # breaks answer quality fails a case rather than passing silently. A
+  # fixed set: one twin pair from each of four families at seed 1, the
+  # support family F1 and the oppose families F4, F6 and F8, so no one
+  # family's bias passes it. It fails unless every twin is answered right.
+  # Slow, so `make harness` leaves it to `make canary`.
+  - name: profile-canary
+    kind: bench
+    slow: true
+    cost: $0; measured 23m35s on local-fast (Ollama 0.34.4, one slot, 2026-09-28), all 8 twins right
+    families: [F1, F4, F6, F8]
+    seeds: [1]
+    arms: [swarm]
+    foragers: minimal
+    require_pairs: true
+
+  - name: swarm-balanced-eval
+    kind: swarm
+    slow: true
+    cost: 4.5 min on claude-cli haiku (2026-09-25); money not recorded
+    question: >-
+      For a single-maintainer open-source tool, is a formal-proof layer (Lean 4)
+      worth keeping in the repository at release, or should it move to a
+      separate repository?
+    foragers: balanced
+    eval: true
+
+  # The hive, graded on the database it leaves rather than on its text. One
+  # critical gap is seeded; the run must answer it with a finding and close
+  # it, and the next plan must stop dispatching for it. The expected answer
+  # is read from the SQLite build chb links. Slow and the priciest case: the
+  # hive's nodes run on sonnet and its final synthesis on opus — the first
+  # seeded run, on 2026-09-25, cost $1.24.
+  - name: hive-seeded-gap
+    kind: hive
+    slow: true
+    cost: $1.24 on claude-cli sonnet and opus (2026-09-25)
+    grade: sqlite-default-page-size
+    project: harness
+    max_iterations: 1
+    gap: >-
+      What is the default page size, in bytes, of a newly created SQLite
+      database file?
+
+  - name: template-researcher-markers
+    kind: template
+    template: researcher
+    agent: researcher
+    cost: one claude -p call of 1 turn on haiku; 16 s (2026-09-25); money not recorded
+    ingest: true
+    min_findings: 3
+    max_turns: 1
+    task: >-
+      No tools are available for this run and none are needed. From your own
+      knowledge, emit exactly three FINDING markers about SQLite's WAL journal
+      mode, all with d1=0 and d2=0, in this order: (1) a `definition` that
+      fixes what this report means by "WAL mode", a choice that needs no
+      source; (2) an `assumption` about a typical performance characteristic
+      of WAL versus rollback journals, citing https://sqlite.org/wal.html;
+      (3) a `guarantee` that follows from the first two, with
+      "depends_on_ids": [1, 2]. Then emit one GAP marker with
+      priority "important". Keep the human-readable sections (Key Findings,
+      Sources, Gaps) to a few lines each.
+
+  - name: template-hive-scout-dbwrite
+    kind: template
+    template: hive-scout
+    agent: scout-harness
+    cost: one claude -p call of up to 6 turns on haiku; 13 s (2026-09-25); money not recorded
+    tools: Bash
+    max_turns: 6
+    min_findings: 2
+    task: >-
+      Your agent name is "scout-harness", wave 1, coordinates d1=0 d2=0 d3=0
+      d4=0, dispatched by signal gap_fill. Gap: "What is the default page size
+      of a database file created by SQLite 3.12.0 or later?" Web tools are not
+      available; Bash is available only to run `chb db-write`. Write exactly
+      two findings with `chb db-write finding`: an `assumption` answering the
+      gap (source_urls https://sqlite.org/pgszchng2016.html) and an `unknown`
+      naming one related fact you cannot confirm without a source. Then return
+      a one-line summary.
+
+  - name: template-verifier-dbwrite
+    kind: template
+    template: verifier
+    agent: verifier-harness
+    cost: one claude -p call of up to 6 turns on haiku; 19 s (2026-09-25); money not recorded
+    tools: Bash
+    max_turns: 6
+    min_findings: 2
+    task: >-
+      Your agent name is "verifier-harness", wave 1, chapter d1=1. Verify this
+      claim against the excerpt. Claim: "SQLite's default page size has been
+      4096 bytes since version 3.12.0." Source [1] (https://sqlite.org/pgszchng2016.html),
+      access tier pmc_fulltext-equivalent (d3=0), excerpt: "Beginning with
+      version 3.12.0 (2016-03-29), the default page size for new database files
+      is 4096 bytes." Web tools are not available; Bash is available only to
+      run `chb db-write`. First write the `definition` finding that records
+      what this check covers: the claim, reference [1] and the excerpt as
+      given (d2=4). Then write the verdict finding with the correct MSS label
+      and, if it is a guarantee, depends_on_ids pointing at the definition's
+      id (the first insert returns id 1). Finish with the short summary block.
+
+  - name: proof
+    kind: proof
+    cost: three agent nodes, capped at $1 by chb proof --max-cost-usd; 14 s (2026-09-25)

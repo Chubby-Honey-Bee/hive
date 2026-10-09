@@ -1,0 +1,142 @@
+name: research-scouts
+description: "High-depth multi-wave research for hard, contested, or under-specified problems. Decompose into 12 angles, fan them out on the worker tier, evaluate twice (after wave1 and after wave2 gap-fill), and synthesize twice — once on synthesist tier (fast read-through) and once on planner tier (final integration). The two-stage synthesis catches errors the planner alone misses by giving it a pre-digested wave summary instead of raw 200k-token fan-out aggregates."
+version: 1
+
+# Indicative cost on standard mode (claude-cli):
+#   • Decompose (planner)                    ~$0.05
+#   • Wave 1 (12 worker fan-out)             ~$0.40
+#   • Evaluate W1 (synthesist)               ~$0.20
+#   • Wave 2 if triggered (8 worker fan-out) ~$0.30
+#   • Re-evaluate (synthesist)               ~$0.20
+#   • Pre-synthesis digest (synthesist)      ~$0.30
+#   • Final synthesis (planner)              ~$0.60
+#   Total                                    ~$2.00 typical
+#
+# Use this when the question is contested across sources, has a long
+# tail of edge cases, or you specifically want negative-evidence
+# coverage (what doesn't work, what vendors won't accept). For routine
+# questions use research-deep.yaml; for one-shot answers use
+# research-quick.yaml.
+
+inputs:
+  - topic
+
+nodes:
+  decompose:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: "Decompose this topic into 12 distinct, non-overlapping research angles that together cover the topic exhaustively, including: (a) the obvious orthogonal axes, (b) at least 2 angles on what does NOT work / what to avoid, (c) at least 1 angle on measurement / verification, (d) at least 1 angle on safety/risk if applicable. Topic: {topic}. Return as a numbered list."
+    outputs: [research_angles]
+    accept:
+      - "outputs.research_angles != ''"
+
+  research-wave1:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt_template: "Research this specific angle of {topic}: {item}. Go deep — specific names, numbers, comparisons, citations. Prefer open-access DOIs over secondary summaries. Include negative findings (what doesn't work, what's been tried and failed). Not Wikipedia-grade. Report findings in your own words — keep any direct quote under 15 words and one per source, then point to the source for more. Attribute every claim to a named source."
+    fan_source: research_angles
+    fan_placeholder: "{item}"
+    outputs: [wave1_findings]
+    accept:
+      - "outputs.wave1_findings != ''"
+
+  evaluate:
+    type: agent
+    agent: evaluator
+    tier: synthesist
+    prompt: >
+      Evaluate research on {topic}. Wave 1 findings: {wave1_findings}.
+      Check coverage, depth, conflicts, gaps, and *negative-evidence
+      completeness* (do we know what does NOT work?). Rate coverage 1-5.
+      Each gap you list becomes one Wave 2 research call, so be specific
+      (which sub-question is unanswered, not 'more research needed').
+
+      Return JSON exactly:
+        {"eval_verdict":"COMPLETE|NEEDS_MORE_WORK|NEEDS_MINOR_FOLLOWUP",
+         "eval_coverage":<coverage from 1 to 5, as a number>,
+         "gaps":["<one specific unanswered sub-question per entry; empty list if COMPLETE>"],
+         "conflicts":"<the contradictions you found, or none>"}
+    outputs: [eval_verdict, eval_coverage, gaps, conflicts]
+    accept:
+      - "outputs.eval_verdict != ''"
+      - "outputs.gaps != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  check-complete:
+    type: decision
+    condition: "eval_verdict == 'COMPLETE'"
+    true_edge: pre-synthesize
+    false_edge: research-wave2
+
+  research-wave2:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt_template: "Fill this specific research gap about {topic}: {item}. Surgical answer with cited sources (open-access preferred). No padding, no restating the question. Report in your own words — any direct quote under 15 words, one per source; point to the source for more."
+    fan_source: gaps
+    fan_placeholder: "{item}"
+    outputs: [wave2_findings]
+    accept:
+      - "outputs.wave2_findings != ''"
+
+  re-evaluate:
+    type: agent
+    agent: evaluator
+    tier: synthesist
+    prompt: "Re-evaluate after Wave 2. Topic: {topic}. Wave 1: {wave1_findings}. Wave 2: {wave2_findings}. Conflicts from W1: {conflicts}. Are gaps filled? New conflicts? Set eval_verdict."
+    outputs: [eval_verdict]
+    accept:
+      - "outputs.eval_verdict != ''"
+
+  check-complete-2:
+    type: decision
+    condition: "eval_verdict == 'COMPLETE' or eval_verdict == 'NEEDS_MINOR_FOLLOWUP'"
+    true_edge: pre-synthesize
+    false_edge: pre-synthesize
+
+  # Two-stage synthesis: cheap pre-digest on synthesist, then final
+  # integration on planner. The planner sees a curated summary instead
+  # of raw 200k-token fan-out aggregates, which improves coherence and
+  # reduces hallucinated cross-references.
+  pre-synthesize:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: "Pre-digest the research on {topic}. Wave 1: {wave1_findings}. Wave 2 (may be empty): {wave2_findings}. Produce a structured outline (~800 words) covering: 1) the headline answer, 2) 4–6 supporting themes with the strongest evidence under each, 3) any unresolved conflicts, 4) confidence labels per claim (high / medium / low). This feeds a planner-tier final synthesis — be faithful to sources, no embellishment."
+    outputs: [pre_synthesis]
+    accept:
+      - "outputs.pre_synthesis != ''"
+
+  synthesize:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: "Final synthesis on: {topic}. Use the pre-digest as the structural backbone: {pre_synthesis}. Cross-check against the raw waves: {wave1_findings} / {wave2_findings}. Lead with the key conclusion, structure by theme (not by agent), flag uncertainties explicitly with confidence labels, include all sources. Write for a smart practitioner who will act on this."
+    outputs: [final_synthesis]
+    accept:
+      - "outputs.final_synthesis != ''"
+
+edges:
+  - from: decompose
+    to: research-wave1
+  - from: research-wave1
+    to: evaluate
+  - from: evaluate
+    to: check-complete
+  - from: check-complete
+    to: pre-synthesize
+    condition: "eval_verdict == 'COMPLETE'"
+  - from: check-complete
+    to: research-wave2
+    condition: "eval_verdict != 'COMPLETE'"
+  - from: research-wave2
+    to: re-evaluate
+  - from: re-evaluate
+    to: check-complete-2
+  - from: check-complete-2
+    to: pre-synthesize
+  - from: pre-synthesize
+    to: synthesize

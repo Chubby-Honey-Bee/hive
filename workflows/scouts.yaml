@@ -1,0 +1,179 @@
+name: scouts
+description: "Exhaustive scout reconnaissance — micro-agent research with convergence scoring and variance passes"
+version: 1
+
+inputs:
+  - topic
+  - question_count
+
+nodes:
+  # ─── Decompose into micro-questions ────────────────────────────
+  decompose:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: >
+      Decompose this research topic into {question_count} discrete micro-questions.
+      Topic: {topic}
+
+      Each question should be answerable in 1-3 web searches. Categorize each as:
+      - fact (haiku): "What is X?" — single verifiable answer
+      - comparison (haiku): "Does X do Y?" — yes/no with source
+      - research (sonnet): "How does X work?" — requires synthesis
+      - analysis (sonnet): "Which is better?" — requires reasoning
+
+      Write each question as {"id": "q001", "question": "...", "category": "fact"}.
+      Put the first 20 in batch1_questions and the rest in remaining_questions.
+      Also list, in critical_questions, the questions whose answers matter
+      most; a variance pass re-asks them.
+
+      Return JSON exactly:
+        {"batch1_questions":[<the first 20 questions>],
+         "remaining_questions":[<the rest; empty list if 20 or fewer>],
+         "critical_questions":[<the questions to re-ask>]}
+    outputs: [batch1_questions, remaining_questions, critical_questions]
+    accept:
+      - "len(outputs.batch1_questions) > 0"
+      - "outputs.remaining_questions != nil"
+      - "outputs.critical_questions != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  # ─── Batch 1: first 20 micro-agents ────────────────────────────
+  batch1:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt: >
+      Answer this one micro-question about {topic}: {item}
+
+      Write your finding to the DB with MSS labels.
+      Return only a 1-line summary.
+    fan_source: batch1_questions
+    outputs: [batch1_results]
+    accept:
+      - "outputs.batch1_results != ''"
+    max_retries: 2
+
+  # ─── Batch 2-N: remaining batches ─────────────────────────────
+  remaining-batches:
+    type: parallel_fan
+    agent: researcher
+    tier: worker
+    prompt: >
+      Answer this one micro-question about {topic}: {item}
+
+      Write your finding to the DB. Return a 1-line summary.
+    fan_source: remaining_questions
+    outputs: [batch_results]
+    accept:
+      - "outputs.batch_results != ''"
+    max_retries: 2
+
+  # ─── Variance pass: re-ask critical questions ─────────────────
+  variance-pass:
+    type: parallel_fan
+    agent: researcher
+    tier: synthesist
+    prompt: >
+      Variance check on {topic}. Re-ask this critical question using
+      DIFFERENT search strategies than the primary pass: {item}
+      Use alternative search terms, different source types, or
+      site-specific searches to verify or contradict primary findings.
+    fan_source: critical_questions
+    outputs: [variance_results]
+    accept:
+      - "outputs.variance_results != ''"
+
+  # ─── Merge & score convergence ─────────────────────────────────
+  # A command node: chb scores convergence itself and its counts reach
+  # state as numbers, with no model relaying them.
+  merge:
+    type: command
+    argv: [chb, swarm-merge, --json]
+    outputs_from: stdout_json
+    outputs: [total_findings, convergence_updates, conflicts_detected]
+
+  # ─── Evaluate ──────────────────────────────────────────────────
+  evaluate:
+    type: agent
+    agent: evaluator
+    tier: planner
+    prompt: >
+      Evaluate scout research completeness on: {topic}
+
+      Findings merged: {total_findings}
+      Findings per convergence level: {convergence_updates}
+      Conflicts detected: {conflicts_detected}
+
+      Check: Are critical questions answered? Are conflicts resolved?
+      Is convergence sufficient?
+
+      Return JSON exactly:
+        {"eval_verdict":"COMPLETE|NEEDS_MORE_WORK",
+         "remaining_gaps":["<one specific unanswered question per entry; empty list if COMPLETE>"]}
+    outputs: [eval_verdict, remaining_gaps]
+    accept:
+      - "outputs.eval_verdict != ''"
+      - "outputs.remaining_gaps != nil"
+    on_reject:
+      max_repair_iterations: 1
+
+  # ─── Decision: need gap-fill? ──────────────────────────────────
+  needs-gap-fill:
+    type: decision
+    condition: "eval_verdict != 'COMPLETE'"
+    true_edge: gap-fill
+    false_edge: synthesize
+
+  # ─── Gap-fill batch ────────────────────────────────────────────
+  gap-fill:
+    type: parallel_fan
+    agent: researcher
+    tier: synthesist
+    prompt: >
+      Fill this specific gap from scout research on {topic}: {item}
+    fan_source: remaining_gaps
+    outputs: [gap_results]
+    accept:
+      - "outputs.gap_results != ''"
+    max_retries: 1
+
+  # ─── Synthesize from DB ────────────────────────────────────────
+  synthesize:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: >
+      Synthesize scout research on: {topic}
+
+      Query the DB directly — do NOT use conversation context.
+      Use: chb db-read summary
+      Then: chb db-read probe '{...}' for each topic area
+
+      Structure: Executive Summary, High-Confidence Findings (3+ independent
+      sources that do not trace to one origin — if the corroborating sources
+      republish the same claim, label it Medium and say so),
+      Medium-Confidence Findings, Remaining Uncertainties, Sources,
+      Research Metadata (agents spawned, batches, convergence stats).
+      State uncertainty plainly rather than overstating; high agent agreement
+      is not the same as source independence.
+    outputs: [final_synthesis]
+    accept:
+      - "outputs.final_synthesis != ''"
+
+edges:
+  - from: decompose
+    to: batch1
+  - from: batch1
+    to: remaining-batches
+  - from: remaining-batches
+    to: variance-pass
+  - from: variance-pass
+    to: merge
+  - from: merge
+    to: evaluate
+  - from: evaluate
+    to: needs-gap-fill
+  - from: gap-fill
+    to: synthesize

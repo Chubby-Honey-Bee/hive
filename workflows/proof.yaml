@@ -1,0 +1,119 @@
+name: proof
+description: |
+  Tiny workflow that proves the runner's mechanisms work in your environment:
+  provider routing, accept: predicates, the on_reject: repair loop, decision
+  branching, the decisions table, per-node rationale and the cost meter. Runs
+  in seconds, costs pennies. Use it to verify your environment
+  before launching anything bigger.
+version: 1
+
+inputs:
+  - target_file
+  - result_path
+
+nodes:
+  count-asserts:
+    type: agent
+    agent: analyst
+    tier: worker
+    prompt: |
+      Use the shell tool to run exactly this command:
+        grep -c 'assert' {target_file}
+      The command prints a single integer (the count of lines containing
+      "assert"). Do NOT use Read for this — the shell tool is required so the
+      cost meter can record token use even with the smallest possible
+      prompt. Verify the output is a single integer before returning.
+
+      Return ONLY this JSON, nothing else:
+        {"count": <integer>}
+
+      Negative evidence: confirm the count is NOT zero. If it IS zero,
+      the file does not exist or grep failed; return {"count": 0} so the
+      accept: predicate fails and the repair loop fires.
+    outputs: [count]
+    accept:
+      - "outputs.count >= 50"
+    on_reject:
+      tier: worker
+      prompt_template: |
+        The previous attempt returned {outputs}, which fails the
+        acceptance predicate (count must be >= 50). The target file is
+        {target_file}. Re-run via the shell tool:
+          grep -c 'assert' {target_file}
+        Verify the file exists and the path is relative to the project
+        working directory. Return ONLY {"count": <integer>}.
+      max_repair_iterations: 1
+
+  branch-on-count:
+    type: decision
+    condition: "count >= 60"
+    true_edge: synthesize-pass
+    false_edge: synthesize-fallback
+
+  synthesize-pass:
+    type: agent
+    agent: analyst
+    tier: worker
+    min_tool_calls: 1
+    prompt: |
+      The autonomous workflow reached the PASS branch with count={count}.
+      Use the shell tool to write a one-line proof artifact:
+        mkdir -p "$(dirname {result_path})" && echo "PASS count={count}" > {result_path}
+      Verify the file exists with `ls {result_path}` before
+      returning. Return ONLY: {"verdict":"pass","artifact":"{result_path}"}
+    outputs: [verdict, artifact]
+    accept:
+      - "outputs.verdict == 'pass'"
+    # The artifact exists only if the shell tool wrote it, so an answer with
+    # no tool call is sent back once to write it.
+    on_reject:
+      tier: worker
+      max_repair_iterations: 1
+      prompt_template: |
+        Your answer was sent back. The reason:
+          {accept_failure}
+
+        The task was:
+          {original_prompt}
+
+        Do it now: run the command with the shell tool, check the file with
+        ls, then return ONLY the JSON the task names.
+
+  synthesize-fallback:
+    type: agent
+    agent: analyst
+    tier: worker
+    min_tool_calls: 1
+    prompt: |
+      The autonomous workflow reached the FALLBACK branch with count={count}.
+      Use the shell tool to write a one-line proof artifact:
+        mkdir -p "$(dirname {result_path})" && echo "FALLBACK count={count}" > {result_path}
+      Verify the file exists with `ls {result_path}` before
+      returning. Return ONLY: {"verdict":"fallback","artifact":"{result_path}"}
+    outputs: [verdict, artifact]
+    accept:
+      - "outputs.verdict == 'fallback'"
+    # The artifact exists only if the shell tool wrote it, so an answer with
+    # no tool call is sent back once to write it.
+    on_reject:
+      tier: worker
+      max_repair_iterations: 1
+      prompt_template: |
+        Your answer was sent back. The reason:
+          {accept_failure}
+
+        The task was:
+          {original_prompt}
+
+        Do it now: run the command with the shell tool, check the file with
+        ls, then return ONLY the JSON the task names.
+
+edges:
+  - from: count-asserts
+    to: branch-on-count
+  - from: branch-on-count
+    to: synthesize-pass
+    condition: "count >= 60"
+  - from: branch-on-count
+    to: synthesize-fallback
+    condition: "count < 60"

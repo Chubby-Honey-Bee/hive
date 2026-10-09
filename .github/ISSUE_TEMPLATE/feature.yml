@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose a change to HIVE
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `docs/specs/` is the contract, one file per subsystem. A change
+        that alters behaviour updates the relevant spec in the same
+        commit. See [CONTRIBUTING.md](https://github.com/Chubby-Honey-Bee/hive/blob/main/CONTRIBUTING.md).
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What problem are you solving?
+      description: The user pain or unmet need this feature addresses
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would the feature work, from a user's perspective?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed and why you ruled them out
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - "Tiny — config/flag/single function"
+        - "Medium — new subcommand, no schema change"
+        - "Large — new forager archetype, new spec, schema change"
+    validations:
+      required: true
+  - type: checkboxes
+    id: specs
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I read the relevant spec in `docs/specs/`

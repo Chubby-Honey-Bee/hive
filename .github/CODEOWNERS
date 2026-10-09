@@ -1,0 +1,27 @@
+# Code owners — require review on the integrity-critical surfaces.
+#
+# HIVE can modify its own source (`chb implement` opens PRs). CODEOWNERS
+# + branch protection ensure a human owns these paths even when the agent
+# touches them: a self-PR can never self-merge changes to the gate, the
+# runner/egress path, the proofs, CI, or the release/security config.
+#
+# Enforcement is GitHub-side: enable "Require review from Code Owners" in
+# branch protection for `main` for this file to have teeth.
+
+# Default owner for everything.
+*                       @the-chronomancer
+
+# The integrity gate + MSS truth-label core.
+/internal/mss/          @the-chronomancer
+
+# Provider resolution + egress allowlist + agent runner (blast radius).
+/internal/runner/       @the-chronomancer
+
+# The Lean 4 proof tree behind the gate's guarantees.
+/lean4/                 @the-chronomancer
+
+# Build, release, CI, and security policy.
+/.github/               @the-chronomancer
+/.goreleaser.yaml       @the-chronomancer
+/Dockerfile             @the-chronomancer
+/SECURITY.md            @the-chronomancer

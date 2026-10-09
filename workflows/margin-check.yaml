@@ -1,0 +1,99 @@
+name: margin-check
+description: "Conditional margin analysis — if margin fails, trigger alt sourcing, re-run pricing"
+version: 1
+
+inputs:
+  - product_name
+  - target_margin
+  - initial_price
+
+nodes:
+  research-pricing:
+    type: agent
+    agent: researcher
+    tier: worker
+    prompt: "Research manufacturing costs, wholesale pricing, and unit economics for {product_name}. Include: unit cost at various MOQs, shipping per unit, packaging cost, platform fees. Be specific with numbers."
+    outputs: [cost_data]
+    accept:
+      - "outputs.cost_data != ''"
+
+  analyze-margin:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: "Calculate margin for {product_name} at retail price {initial_price}. Cost data: {cost_data}. Account for: platform fees (15%), shipping ($4-6), packaging ($1-2), returns (15-22%). Return JSON exactly: {\"margin_result\":\"<the margin maths, one line>\",\"margin_pct\":<the margin percentage, as a number>}"
+    outputs: [margin_result, margin_pct]
+    accept:
+      - "outputs.margin_result != ''"
+
+  check-margin:
+    type: decision
+    condition: "margin_pct >= target_margin"
+    true_edge: finalize
+    false_edge: alt-sourcing
+
+  alt-sourcing:
+    type: agent
+    agent: researcher
+    tier: worker
+    prompt: "Find alternative manufacturers/suppliers for {product_name} with lower unit cost than current: {cost_data}. Search different regions, materials, MOQ tiers. Need at least 3 alternatives with specific pricing."
+    outputs: [alt_cost_data]
+    accept:
+      - "outputs.alt_cost_data != ''"
+
+  re-analyze-margin:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: "Recalculate margin for {product_name} at {initial_price} using alternative sourcing: {alt_cost_data}. Same fee structure as before. Return JSON exactly: {\"margin_result\":\"<the margin maths, one line>\",\"margin_pct\":<the margin percentage, as a number>}"
+    outputs: [margin_result, margin_pct]
+    accept:
+      - "outputs.margin_result != ''"
+
+  check-margin-retry:
+    type: decision
+    condition: "margin_pct >= target_margin"
+    true_edge: finalize
+    false_edge: escalate
+
+  escalate:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: "Margin target of {target_margin}% is not achievable for {product_name} at {initial_price}. Original costs: {cost_data}. Alt sourcing: {alt_cost_data}. Best margin found: {margin_pct}%. Analyze alternatives: price increase needed, scope/feature reduction, different product category, bundle strategies. Provide actionable recommendation."
+    outputs: [recommendation]
+    accept:
+      - "outputs.recommendation != ''"
+
+  finalize:
+    type: agent
+    agent: analyst
+    tier: synthesist
+    prompt: "Create final pricing recommendation for {product_name}. Target margin: {target_margin}%. Achieved margin: {margin_pct}%. Analysis: {margin_result}. Structure as: Executive Summary, Unit Economics Breakdown, Risk Factors, Recommended Action."
+    outputs: [final_report]
+    accept:
+      - "outputs.final_report != ''"
+
+edges:
+  - from: research-pricing
+    to: analyze-margin
+  - from: analyze-margin
+    to: check-margin
+  - from: check-margin
+    to: finalize
+    condition: "margin_pct >= target_margin"
+  - from: check-margin
+    to: alt-sourcing
+    condition: "margin_pct < target_margin"
+  - from: alt-sourcing
+    to: re-analyze-margin
+  - from: re-analyze-margin
+    to: check-margin-retry
+  - from: check-margin-retry
+    to: finalize
+    condition: "margin_pct >= target_margin"
+  - from: check-margin-retry
+    to: escalate
+    condition: "margin_pct < target_margin"
+  - from: escalate
+    to: finalize

@@ -1,0 +1,87 @@
+# GoReleaser configuration for HIVE (chb)
+# https://goreleaser.com/customization/
+version: 2
+
+project_name: chb
+
+before:
+  hooks:
+    # Check, never fix: `go mod tidy` rewrote go.mod / go.sum here, so a
+    # release could build from files that differ from the tagged commit.
+    - go mod tidy -diff
+    - go test ./...
+
+builds:
+  - id: chb
+    main: ./cmd/chb
+    binary: chb
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # -trimpath, as every other build path here uses: without it release
+    # binaries embed the builder's absolute paths.
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+  - id: chb-mcp
+    main: ./cmd/chb-mcp
+    binary: chb-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: default
+    ids:
+      - chb
+      - chb-mcp
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # The binaries carry foragers/, agents/ and workflows/ (assets.go), so
+    # the archives hold no copy: a folder beside the binary is read before
+    # the carried one, and a copy left over from an earlier release would
+    # outlive the next upgrade of the binary.
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  github:
+    owner: Chubby-Honey-Bee
+    name: hive
+  draft: true
+  prerelease: auto

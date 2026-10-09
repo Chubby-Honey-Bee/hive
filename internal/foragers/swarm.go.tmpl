@@ -1,0 +1,320 @@
+name: << .Name >>
+description: |
+  HIVE forager swarm — generated << .Date >>.
+  Every lens forager analyses the question through its own perspective,
+  reading any upstream verdicts they're bonded to. Queen
+  (the synthesizer) integrates every verdict into a single structured
+  Verdict document. When a dreamer-archetype forager is in the swarm,
+  it ripens the Comb after Queen closes the loop.
+version: 1
+
+inputs:
+  - question
+  - context<< if .ContextSplit >><< range .Foragers >>
+  - << .ContextKey >><< end >><< end >>
+<< if .Resonates >>
+# Machine-readable resonates bonds — the runner registers these with the
+# ∇ quorum sensor, which watches the Comb for bonded-verdict convergence
+# and records each ∇ (forager_bonds + nabla signal) as it fires.
+resonates:<< range .Resonates >>
+  - [<< .A >>, << .B >>]<< end >>
+<< end >>
+nodes:<< if .Scope >>
+  scope:
+    type: agent
+    agent: swarm
+    role: scope
+    << if .SynthesizerModel >>model: << .SynthesizerModel >><< else >>tier: << .SynthesizerTier >><< end >><< if .Reasoning.Synthesizer >>
+    reasoning: << .Reasoning.Synthesizer >><< end >>
+    tools: []
+    prompt: |
+      Sharpen this question for a deliberating swarm of analytical
+      lenses. Restate it as ONE precise, decidable sentence. If it is
+      ambiguous, pick the most defensible reading and NAME the assumption
+      you made — do not invent scope the asker didn't imply.
+
+      Question:
+        {question}
+
+      Context:
+        {context}
+
+      Return JSON exactly:
+        {"assumptions":["<each assumption you had to make, or empty>"],
+         "scoped_question":"<one precise, decidable sentence>"}
+    outputs: [scoped_question, assumptions]
+    output_schema:
+      type: object
+      required: [assumptions, scoped_question]
+      properties:
+        assumptions: {type: array, items: {type: string}}
+        scoped_question: {type: string}
+    accept:
+      - "outputs.scoped_question != ''"
+    on_reject:
+      max_repair_iterations: 1
+<< end >><< range $i, $w := .Foragers >>
+  forager-<< $w.Name >>:
+    type: agent
+    agent: swarm
+    role: lens
+    << if $w.Model >>model: << $w.Model >><< else >>tier: << $.ForagerTier >><< end >><< if $.Reasoning.Forager >>
+    reasoning: << $.Reasoning.Forager >><< end >><< if $.LensTools >>
+    << $.LensTools >><< end >>
+    prompt: |
+      You are << $w.Title >>, one forager of the HIVE swarm.
+
+      Your lens:
+        << $w.Lens >><< if $w.Jungian >>
+      Jungian archetype: << $w.Jungian >><< end >><< if $w.IFSRole >>
+      IFS role: << $w.IFSRole >><< end >>
+
+      Question:
+        << if $.Scope >>{scoped_question}<< else >>{question}<< end >>
+
+      Context<< if $.ContextSplit >> (part << $w.Part >> of << len $.Foragers >>: each lens reads a different part of the context)<< end >>:
+        << if $.ContextSplit >>{<< $w.ContextKey >>}<< else >>{context}<< end >><< if eq $w.Name "framer" >>
+
+      Axis-candidate evidence (computed from how findings in this
+      workspace cluster — which non-coordinate attributes distinguish
+      findings within a single coordinate cell):
+        {cde.axis-candidates}
+      Use this as data-grounded evidence for whether the proposed slot
+      should be claimed; do not invent scan evidence you cannot see.<< end >><< range $up := $w.CitesFrom >>
+
+      What << $up >> already concluded (read this before answering):
+        {comb.forager:<< $up >>}<< end >><< range $up := $w.Inversions >>
+
+      What << $up >> concluded — your role is to construct the strongest
+      possible inversion of this position, not merely disagree:
+        {comb.forager:<< $up >>}<< end >><< if $w.Resonators >>
+
+      You are bonded by `resonates` with: << range $j, $r := $w.Resonators >><< if $j >>, << end >><< $r >><< end >>.
+      Where your verdict and theirs converge, the synthesizer marks it
+      as a ∇ convergence in the final Verdict.<< end >><< if $w.AbsentResonators >>
+
+      Your `resonates` partners outside this swarm, with whom no ∇ can
+      fire: << range $j, $r := $w.AbsentResonators >><< if $j >>, << end >><< $r >><< end >>.<< end >>
+
+      Persona:
+<< $w.Persona >>
+
+      Return JSON exactly with these keys, in this order:
+        {"forager":"<< $w.Name >>",
+         "key_points":[...],
+         "evidence":[...],
+         "uncertainties":[...],
+         "verdict":"support|oppose|conditional|abstain",
+         "recommendation":"<one sentence>"}
+    outputs: [verdict, key_points, evidence, uncertainties, recommendation]<< if $w.Schema >>
+    output_schema: << $w.Schema >><< end >>
+    accept:
+      - "outputs.verdict == 'support' or outputs.verdict == 'oppose' or outputs.verdict == 'conditional' or outputs.verdict == 'abstain'"
+    on_reject:
+      max_repair_iterations: 1<< end >><< if .Direct >>
+
+  forager-<< .Direct.Name >>:
+    type: agent
+    role: lens
+    << if .Direct.Model >>model: << .Direct.Model >><< else >>tier: << .ForagerTier >><< end >><< if .Reasoning.Forager >>
+    reasoning: << .Reasoning.Forager >><< end >>
+    tools: []
+    prompt: |
+<< .Direct.Prompt >>
+    outputs: [verdict, key_points, recommendation]
+    output_schema: << .Direct.Schema >>
+    accept:
+      - "outputs.verdict == 'support' or outputs.verdict == 'oppose' or outputs.verdict == 'conditional' or outputs.verdict == 'abstain'"
+    on_reject:
+      max_repair_iterations: 1<< end >>
+
+  queen:
+    type: agent
+    agent: swarm
+    role: queen
+    << if .SynthesizerModel >>model: << .SynthesizerModel >><< else >>tier: << .SynthesizerTier >><< end >><< if .Reasoning.Synthesizer >>
+    reasoning: << .Reasoning.Synthesizer >><< end >>
+    tools: []
+    join: settled
+    prompt: |
+      << if .SynthesizerPersona >>Persona:
+<< .SynthesizerPersona >>
+      << else >>You are Queen — the colony's center, the one seat that
+      unifies the Swarm's perspectives into a single coherent verdict.
+      The foragers' separate verdicts (distinct lenses) and the unified
+      Verdict (the swarm's voice) are the same truth seen from different
+      vantages. Your job is to make their convergence visible.
+
+      You are also the IFS Self in this swarm: curious, calm,
+      compassionate, courageous, clear, confident, creative,
+      connected. Don't overrule any forager — integrate them. Where
+      they diverge, name the divergence honestly.
+      << end >>
+      Question:
+        << if $.Scope >>{scoped_question}<< else >>{question}<< end >>
+
+      << template "verdicts" . >>
+
+      Vote tally, counted by the runner from the verdicts above. Abstain
+      casts no vote, so it is never the plurality:
+        {tally}
+
+      ∇ convergences, computed by the runner: the resonates-bonded pairs
+      whose verdict strings are identical. Identical strings are not
+      agreement in substance: two lenses can both say conditional for different reasons.
+        {nabla.fired}
+      Report exactly these pairs in ∇ Convergences, or say none or
+      unavailable as the line does. Add no pair it does not list.
+
+      Lens diversity, checked by the runner: whether every lens that
+      answered ran on one model and returned the same verdict.
+        {diversity}
+      When it says low, say so in Consensus: the agreement is one
+      model's view, not independent ones.{calibration.lenses}<< if .Evaluate >>
+
+      A coverage evaluator reviewed the lenses and named these gaps:
+        {gaps}
+      Follow-up lenses were sent to the first << .Followups >> of those gaps, in order.
+      Item N below answers gap N, or says why it has no finding:
+        {followup_findings}
+      The gaps past that limit, which no follow-up lens was sent to:
+        {gaps_unfollowed}
+      Integrate the follow-up findings. In Coverage & Gaps, name every gap
+      that no follow-up answered, so none is dropped silently.<< end >>
+
+      Write the report in Markdown with these sections, in order:
+      ## Swarm Verdict: <topic>; ### The Question; ### Consensus;
+      ### Disagreements; ### Unique Insights; ### ∇ Convergences;
+      ### Coverage & Gaps; ### Follow-Up Questions; ### Recommended Action.
+
+      Your verdict follows the plurality in the tally unless the
+      lenses' evidence says otherwise. When it differs from the
+      plurality, say in dissent_from_plurality, in a sentence, which
+      lens's evidence outweighs it; otherwise leave that field empty.
+
+      Return only this JSON object, with its keys in this order:
+        {"report":"<the Markdown report>",
+         "convergence":"high|medium|low",
+         "coverage":<1-5 — how completely the lenses covered the question>,
+         "gaps":["<angle under-covered or left unverified>"],
+         "dissent_from_plurality":"<why your verdict differs from the plurality, or empty>",
+         "verdict":"support|oppose|conditional|abstain",
+         "recommendation":"<one sentence>"}
+    outputs: [report, verdict, convergence, recommendation, coverage, gaps, dissent_from_plurality]<< if .SynthesizerSchema >>
+    output_schema: << .SynthesizerSchema >><< end >>
+    accept:
+      - "outputs.verdict == 'support' or outputs.verdict == 'oppose' or outputs.verdict == 'conditional' or outputs.verdict == 'abstain'"
+      - predicate: "tally_plurality == '' or outputs.verdict == tally_plurality or (outputs.verdict == 'abstain' and tally_abstentions >= tally_votes) or len(outputs.dissent_from_plurality) >= << .MinDissent >>"
+        reason: "The foragers' plurality was {tally_plurality}; you answered {outputs.verdict}. Either answer {tally_plurality}, or write in dissent_from_plurality, in a sentence of at least << .MinDissent >> characters, which forager's evidence outweighs it. The tally: {tally_line}."
+    on_reject:
+      max_repair_iterations: 1
+<< if .HumanGate >>
+  human-gate:
+    type: human_review
+    prompt: |
+      Queen has produced a verdict. Approve to proceed to the
+      dreamer ripening pass; reject to halt the swarm here.
+<< end >><< range $d := .Dreamers >>
+  dreamer-<< $d.Name >>:
+    type: agent
+    agent: << $d.Name >>
+    archetype: dreamer
+    forager_name: << $d.Name >>
+    prompt: |
+      You are << $d.Title >>, the dreamer-archetype forager. The lens
+      foragers have spoken; Queen has integrated their verdicts.
+      Your task now is to ripen the Comb — run the five consolidation
+      passes (prune → reprove → contradict → hypothesize → settle)
+      over what the swarm has just deposited.
+
+      Persona:
+<< $d.Persona >>
+
+      The runner dispatches you through internal/dreamer.Run rather
+      than an LLM backend; this prompt is here for symmetry and so the
+      Comb's forager-vantage for you carries a meaningful narrative.
+    outputs: [passes, touched, halted]
+<< end >><< if .Evaluate >>
+  swarm-evaluate:
+    type: agent
+    agent: swarm
+    role: evaluate
+    << if .SynthesizerModel >>model: << .SynthesizerModel >><< else >>tier: << .SynthesizerTier >><< end >><< if .Reasoning.Synthesizer >>
+    reasoning: << .Reasoning.Synthesizer >><< end >>
+    tools: []
+    join: settled
+    prompt: |
+      You are the swarm's coverage evaluator. The lens foragers have
+      delivered their verdicts; synthesis has NOT happened yet. Judge how
+      COMPLETELY the lenses, taken together, covered the question — not
+      whether you agree with any verdict.
+
+      Question:
+        << if $.Scope >>{scoped_question}<< else >>{question}<< end >>
+
+      << template "verdicts" . >>
+
+      Name the angles the swarm under-covered or left unverified, most
+      important first. Be honest — do not manufacture completeness, and do
+      not pad. If coverage is genuinely thorough, return an empty gaps list.
+
+      Return JSON exactly:
+        {"gaps":["<an under-covered angle, phrased as a question a fresh lens could answer>"],
+         "coverage":<1-5 — 5 = no obvious angle missing>}
+    outputs: [coverage, gaps]
+    output_schema:
+      type: object
+      required: [gaps, coverage]
+      properties:
+        gaps: {type: array, items: {type: string}}
+        coverage: {type: integer, minimum: 1, maximum: 5}
+    accept:
+      - "outputs.gaps != nil"
+    on_reject:
+      max_repair_iterations: 1
+    state_updates:
+      followup_findings: "(none: no follow-up lens ran, or the follow-up fan did not finish)"
+
+  swarm-followup:
+    type: parallel_fan
+    agent: swarm
+    role: followup
+    << if $.Model >>model: << $.Model >><< else >>tier: << $.ForagerTier >><< end >><< if $.Reasoning.Forager >>
+    reasoning: << $.Reasoning.Forager >><< end >><< if $.LensTools >>
+    << $.LensTools >><< end >>
+    prompt_template: |
+      The swarm under-covered this angle of the question. Address it
+      directly — specific evidence, named tradeoffs, what would change the
+      answer. This is a gap the lenses missed; fill it, don't restate it.
+
+      Question:
+        << if $.Scope >>{scoped_question}<< else >>{question}<< end >>
+
+      Gap to fill:
+        {gap}
+
+      Return JSON exactly: {"followup_findings":"<your specific finding on this gap>"}
+    fan_source: gaps
+    fan_placeholder: "{gap}"
+    fan_limit: << .Followups >>
+    fan_overflow: gaps_unfollowed
+    outputs: [followup_findings]
+    output_schema:
+      type: object
+      required: [followup_findings]
+      properties:
+        followup_findings: {type: string}
+    accept:
+      - "outputs.followup_findings != ''"
+<< end >>
+edges:<< range $e := .Edges >>
+  - {from: << $e.From >>, to: << $e.To >><< if $e.Condition >>, condition: "<< $e.Condition >>"<< end >>}<< end >>
+<< define "verdicts" >><< if .Ledger >>The swarm ledger, computed by the runner from this run's forager
+      nodes. It gives the full verdict only of a lens whose verdict is not
+      the plurality, since a departure from the plurality must name the
+      evidence that outweighs it:
+        {swarm.ledger}
+      Axes no lens in this swarm owns: << .Uncovered >>.<< if .Direct >>
+      The lens named << .Direct.Name >> in the ledger is the direct answer: the model with no persona, over the question and the whole context.<< end >><< else >>Forager verdicts, each as its node returned it in this run:<< range $w := .Foragers >>
+        << $w.Title >> (<< $w.Name >>): {verdict.forager:<< $w.Name >>}<< end >><< if .Direct >>
+        << .Direct.Title >> (<< .Direct.Name >>), the model with no persona, over the question and the whole context: {verdict.forager:<< .Direct.Name >>}<< end >><< end >><< end ->>

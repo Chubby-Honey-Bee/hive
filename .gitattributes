@@ -1,0 +1,28 @@
+# Enforce LF line endings in the repo and on checkout, on every OS.
+#
+# Why: the behavior fixtures are byte-equal contracts and the embedded
+# templates and personas ship as checked in, so a Windows checkout with
+# core.autocrlf=true should not change the bytes. (The persona parsers
+# normalise CRLF themselves — foragers/*.md with CRLF endings load and
+# validate — so this is consistency, not a workaround for a parser bug.)
+* text=auto eol=lf
+
+# Source and data the toolchain parses — explicit LF.
+*.go    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.sh    text eol=lf
+*.lean  text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+
+# Binary assets — never normalize.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.db    binary

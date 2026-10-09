@@ -1,0 +1,38 @@
+# chb agent-harness bench suite — graded twin items (docs/specs/bench.md).
+# Each family asks a question the forager roster answers, paired with an edit
+# that flips the answer; the roster rides in --context, so no tools are
+# needed. Every item runs as a minimal swarm and as one call with no persona.
+#
+#   chb agent-harness --suite fixtures/bench/suite.yaml --only selection \
+#     --provider openai --lens-model <m> --queen-model <m> --seed 7 \
+#     --lens-reasoning none --queen-reasoning none \
+#     --config C1 --workspace workspace/bench/C1
+#
+# A Qwen model on Ollama thinks unless told not to. Bench-0 measured
+# thinking hitting the output cap and leaving no answer, so pass
+# --lens-reasoning none and --queen-reasoning none when a role runs on
+# Qwen. ministral-3:8b accepts none too (Ollama 0.34.4, 2026-09-28).
+#
+# A mixed-family arm lists its lens models: --lens-model
+# qwen3.5:4b,ministral-3:8b gives the lenses those models in turn (C5 in
+# rule.yaml). The list is rotated by each item's seed and repetition, so
+# across seeds each lens runs on each model. The solo control runs on the
+# first. The report's correlated-error rate, over all lens pairs and over
+# pairs on different models, measures whether the second family errs apart
+# from the first; it does not claim that it does.
+#
+# 7 families x 4 seeds = 28 pairs, 56 items: 56 swarms and 56 solo calls per
+# configuration. Run confirmation only for the configuration the rule picks.
+# Confirmation items are drawn after the selection seeds' items, so none
+# repeats one of them; exclude_seeds must list the selection seeds.
+cases:
+  - name: bench-twins-selection
+    kind: bench
+    foragers: minimal
+    seeds: [1, 2, 3, 4]
+
+  - name: bench-twins-confirmation
+    kind: bench
+    foragers: minimal
+    seeds: [101, 102, 103, 104]
+    exclude_seeds: [1, 2, 3, 4]

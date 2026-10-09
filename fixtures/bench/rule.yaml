@@ -1,0 +1,37 @@
+# The Bench-1 decision rule, fixed before the first run: change it before
+# any results exist, never after. `chb bench decide --rule` reads it; any key
+# left out takes the value in internal/bench.DefaultRule. Configuration names
+# are the --config labels given to chb agent-harness.
+reference: R            # haiku lenses and Queen on claude-cli, --budget-mode cheap
+negative: N             # qwen3.5:0.8b in every role; the run is void if it passes
+
+delta: 0.15             # non-inferiority margin on class-balanced accuracy and token F1
+alpha: 0.05             # one-sided
+completion_lower_bound: 0.85   # Wilson 95% lower bound on runs completed
+class_floor: 0.70              # accuracy on support items and on oppose items, each
+full_verdict_min: 0.90         # share of lenses Queen read in full
+schema_valid_enforced: 1.0     # configurations whose schema is enforced during generation
+schema_valid_repaired: 0.95    # all others
+abstain_margin: 0.10           # abstain items answered support/oppose: at most R's rate + this
+wall_tie: 0.10                 # within 10% of the fastest, prefer less memory
+
+selection_seeds: [1, 2, 3, 4]
+confirmation_seeds: [101, 102, 103, 104]
+
+# Configurations a machine class may choose, with the memory their models
+# need: the ollama.com tag sizes of the lens and Queen models, summed when
+# they differ. `enforced` was set on 2026-09-30 from the constraint probe,
+# as this comment pre-committed: on Ollama 0.34.4 and 0.35.0 every node on
+# qwen3.5:4b, ministral-3:8b and qwen3.6:35b-a3b-q4_K_M reported `enforced at
+# decode` (the quick screen, 7 configurations, 0 post-hoc). N had run; no
+# candidate configuration had completed.
+configs:
+  C1: {memory_gb: 30.0, enforced: true}   # ministral-3:8b lenses, qwen3.6:35b-a3b-q4_K_M Queen
+  C2: {memory_gb: 27.4, enforced: true}   # qwen3.5:4b lenses, qwen3.6:35b-a3b-q4_K_M Queen
+  C3: {memory_gb: 24.0, enforced: true}   # qwen3.6:35b-a3b-q4_K_M in every role
+  C4: {memory_gb: 6.0, enforced: true}    # ministral-3:8b in every role
+  C5: {memory_gb: 33.4, enforced: true}   # qwen3.5:4b and ministral-3:8b lenses in turn (--lens-model qwen3.5:4b,ministral-3:8b --lens-reasoning none), qwen3.6:35b-a3b-q4_K_M Queen (--queen-reasoning none)
+
+# The M1 Max's Metal budget. Other classes need their own measured budget.
+classes:
+  - {name: m1max-64gb, memory_gb: 51.8}

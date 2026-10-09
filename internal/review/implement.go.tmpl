@@ -1,0 +1,124 @@
+name: << .Name >>
+description: |
+  Self-implement run — autonomous fix dispatch generated from a
+  self-review findings.json. Plan-then-execute with progressive cost
+  tiers: one planner (top-tier) reads the full findings list and emits
+  a sequenced fix plan; N workers (cheap) each apply one fix, in
+  sequence, against the one shared working tree; one synthesist
+  (mid-tier) evaluates the diff and the test-suite outcome.
+  Generated << .Date >>.
+version: 1
+
+inputs: []
+
+nodes:
+  # analyst, not coder-fix: coder-fix's persona requires every response to
+  # end with the compile_ok/tests_pass object, and this node returns plan_ok.
+  plan:
+    type: agent
+    agent: analyst
+    role: implement-plan
+    tier: planner
+    prompt: |
+      You are the planning step for a multi-fix implementation run.
+      Below is a list of code-review findings, each with a file, line,
+      severity, and proposed fix. Read all of them and emit a sequenced
+      plan that:
+
+        - Groups fixes that touch the same file (apply sequentially to
+          avoid merge conflicts)
+        - Identifies fixes that depend on each other (apply in topological
+          order)
+        - Flags any finding whose fix would conflict with another
+        - Flags any fix that should be applied before another
+
+      The fix nodes run one at a time in index order (1..N) against a
+      single shared working tree, so your ordering is advice for the
+      person who reads this run, not a dispatch instruction: say plainly
+      in `notes` if index order is unsafe, and which pair to swap.
+
+      Findings:
+      << range $i, $f := .Fixes >>
+        - id: << $f.NodeIndex >>
+          file: << $f.File >>:<< $f.Line >>
+          severity: << $f.Severity >>
+          lens: << $f.Lens >>
+          issue: << $f.Issue >>
+          fix:   << $f.Fix >><< end >>
+
+      Return JSON exactly:
+        {"plan_ok": <bool>,
+         "ordering": [<list of fix ids in execution order>],
+         "groups": {"<file>": [<fix ids>]},
+         "notes": "<one-line summary of the plan>"}
+    outputs: [plan_ok, ordering, groups, notes]
+    accept:
+      - "outputs.plan_ok == true"
+<< range $i, $f := .Fixes >>
+  fix-<< $f.NodeIndex >>:
+    type: agent
+    agent: coder-fix
+    role: implement-fix
+    << if $.Model >>model: << $.Model >><< else >>tier: worker<< end >>
+    prompt: |
+      Apply this single fix from the plan above:
+
+      file:     << $f.File >>
+      line:     << $f.Line >>
+      severity: << $f.Severity >>
+      lens:     << $f.Lens >>
+
+      issue:
+        << $f.Issue >>
+
+      fix:
+        << $f.Fix >>
+
+      Read the file, apply the minimal change, run `go build ./...` and
+      `go test ./<package>`. Confirm the issue still applies before editing
+      (if it doesn't, set both booleans to false and explain in
+      diff_summary rather than forcing a change). Verify exit codes
+      literally — do not infer success.
+
+      Return JSON exactly:
+        {"compile_ok": <bool>, "tests_pass": <bool>, "diff_summary": "<one line>"}
+    outputs: [compile_ok, tests_pass, diff_summary]
+    verify_tests: true
+    accept:
+      - "outputs.compile_ok == true"
+      - "outputs.tests_pass == true"
+    on_reject:
+      role: implement-repair
+      << if $.RepairModel >>model: << $.RepairModel >><< else >>tier: synthesist<< end >>
+      prompt_template: |
+        The previous fix failed acceptance. Original prompt: {original_prompt}
+        Outputs were: {outputs}
+        Read the literal go build / go test failure in your prior reasoning
+        and produce a corrected minimal fix. Do not refactor; do not expand
+        scope. If the fix cannot succeed, return compile_ok=false and
+        explain why in diff_summary so the run can move on.
+      max_repair_iterations: 1<< end >>
+  # The final gate is three command nodes. The runner runs each command and
+  # records its exit code, so no model reports the codes unchecked. A
+  # non-zero exit fails its node, and the run with it.
+  final-gate-go-test:
+    type: command
+    argv: [go, test, ./...]
+  final-gate-validate:
+    type: command
+    argv: [chb, validate]
+  final-gate-replay:
+    type: command
+    argv: [chb, replay-behavior]
+
+# One working tree, so one fix at a time. Fanning every fix node off
+# `plan` let N agents edit the same checkout concurrently — interleaved
+# writes, and a planner asked for a sequence whose answer nothing could
+# act on. The chain below is that sequence.
+# NodeIndex is i+1, so the predecessor of fix-<i+1> is fix-<i>.
+edges:<< range $i, $f := .Fixes >><< if eq $i 0 >>
+  - {from: plan, to: fix-<< $f.NodeIndex >>}<< else >>
+  - {from: fix-<< $i >>, to: fix-<< $f.NodeIndex >>}<< end >><< end >>
+  - {from: fix-<< len .Fixes >>, to: final-gate-go-test}
+  - {from: final-gate-go-test, to: final-gate-validate}
+  - {from: final-gate-validate, to: final-gate-replay}

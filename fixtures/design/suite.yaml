@@ -1,0 +1,19 @@
+# The executability benchmark (docs/specs/bench-design.md). Run:
+#   chb agent-harness --suite fixtures/design/suite.yaml --only design --profile local-fast
+# Twelve Go tasks under fixtures/design/, four of them twin pairs. Each runs
+# through the designer arm (chb ask over the task, then the plan call with
+# the swarm's research) and the control arm (the plan call alone); the plain
+# coder persona carries each plan out in a fresh copy of the tree; the
+# hidden tests grade the result. Rows go to
+# workspace/agent-harness/design-twelve/results.jsonl for chb design report.
+cases:
+  - name: design-twelve
+    kind: design
+    cost: >-
+      not yet measured; estimated for local-fast from Bench-1's swarm time
+      (about 2.5 min a minimal swarm) plus one plan call and an executor of
+      up to 10 min per arm: about 12 tasks × (designer about 15 min +
+      control about 12 min), 4 to 5.5 hours in all, $0
+    tasks: fixtures/design
+    foragers: minimal
+    executor_minutes: 10

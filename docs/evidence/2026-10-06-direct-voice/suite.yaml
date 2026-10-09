@@ -1,0 +1,9 @@
+# The Bench-1 selection case (fixtures/bench/suite.yaml, bench-twins-selection)
+# on the swarm arm only. The solo control reads neither flag under test, so
+# running it would cost 56 calls per arm and decide nothing (rule.md).
+cases:
+  - name: bench-twins-selection
+    kind: bench
+    foragers: minimal
+    seeds: [1, 2, 3, 4]
+    arms: [swarm]

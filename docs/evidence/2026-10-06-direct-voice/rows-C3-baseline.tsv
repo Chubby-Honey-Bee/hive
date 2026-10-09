@@ -1,0 +1,57 @@
+item	want	got	correct	completed	convergence	tally	plurality	margin	dissent_written	nabla_fired	direct	wall_seconds
+AB-s1-a	oppose	oppose	True	True	high	oppose 6, abstain 1	oppose	6	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (oppose); skeptic↔steward (oppose)	-	107.542983667
+AB-s1-b	abstain	abstain	True	True	medium	abstain 6, oppose 1	oppose	1	False	none	-	104.3776655
+F1-s1-a	support	support	True	True	medium	support 5, oppose 2	support	3	False	empiricist↔skeptic (support); skeptic↔steward (support)	-	178.756310167
+F1-s1-b	oppose	oppose	True	True	high	oppose 5, support 2	oppose	3	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); skeptic↔steward (support)	-	154.349014709
+F2-s1-a	support	support	True	True	high	support 7	support	7	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	166.093887042
+F2-s1-b	oppose	oppose	True	True	medium	oppose 4, support 2, abstain 1	oppose	2	False	empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (support)	-	156.470857625
+F3-s1-a	support	support	True	True	medium	support 5, abstain 1, oppose 1	support	4	False	empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	141.63505725
+F3-s1-b	oppose	oppose	True	True	high	oppose 4, support 2, abstain 1	oppose	2	False	architect↔pragmatist (oppose); empiricist↔skeptic (support); pragmatist↔steward (oppose)	-	177.901344958
+F4-s1-a	oppose	oppose	True	True	medium	oppose 4, abstain 3	oppose	4	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose)	-	125.971934208
+F4-s1-b	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	115.58483525
+F6-s1-a	oppose	oppose	True	True	high	oppose 5, support 2	oppose	3	False	empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); pragmatist↔steward (oppose)	-	130.478144292
+F6-s1-b	support	support	True	True	medium	support 5, oppose 2	support	3	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔skeptic (support)	-	129.4863245
+F8-s1-a	oppose	oppose	True	True	high	oppose 5, abstain 2	oppose	5	False	empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	135.84368575
+F8-s1-b	support	support	True	True	high	support 5, abstain 1, oppose 1	support	4	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); pragmatist↔steward (support)	-	161.273109208
+AB-s2-a	oppose	oppose	True	True	high	oppose 6, abstain 1	oppose	6	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (oppose); skeptic↔steward (oppose)	-	105.473832541
+AB-s2-b	abstain	oppose	False	True	medium	abstain 4, oppose 2, support 1	oppose	1	False	none	-	110.373971167
+F1-s2-a	support	support	True	True	medium	support 6, oppose 1	support	5	False	empiricist↔scholar (support); empiricist↔skeptic (support); skeptic↔steward (support)	-	177.2430775
+F1-s2-b	oppose	abstain	False	True	low	oppose 3, support 3, abstain 1	none	0	False	empiricist↔scholar (oppose); pragmatist↔steward (support); skeptic↔steward (support)	-	185.576310459
+F2-s2-a	support	support	True	True	low	support 7	support	7	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	181.619921792
+F2-s2-b	oppose	oppose	True	True	high	oppose 4, support 2, abstain 1	oppose	2	False	empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (support)	-	164.166707625
+F3-s2-a	support	support	True	True	medium	support 5, oppose 2	support	3	False	empiricist↔pragmatist (oppose); skeptic↔steward (support)	-	176.750924375
+F3-s2-b	oppose	conditional	False	True	low	support 5, abstain 1, oppose 1	support	4	True	empiricist↔scholar (support); empiricist↔skeptic (support); skeptic↔steward (support)	-	181.55585825
+F4-s2-a	oppose	oppose	True	True	high	oppose 5, abstain 2	oppose	5	False	empiricist↔scholar (oppose); empiricist↔skeptic (oppose); skeptic↔steward (oppose)	-	117.125775708
+F4-s2-b	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	120.935821709
+F6-s2-a	oppose	oppose	True	True	medium	oppose 3, support 2, abstain 1, conditional 1	oppose	1	False	empiricist↔pragmatist (support)	-	137.877059084
+F6-s2-b	support	support	True	True	high	support 6, oppose 1	support	5	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); pragmatist↔steward (support)	-	125.555138208
+F8-s2-a	oppose	oppose	True	True	high	oppose 5, abstain 2	oppose	5	False	empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	153.266574167
+F8-s2-b	support	support	True	True	medium	support 5, abstain 1, oppose 1	support	4	False	empiricist↔scholar (support); empiricist↔skeptic (support); skeptic↔steward (support)	-	169.270218833
+AB-s3-a	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	95.728516875
+AB-s3-b	abstain	oppose	False	True	medium	oppose 5, abstain 2	oppose	5	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	110.441739833
+F1-s3-a	support	support	True	True	medium	support 4, oppose 2, abstain 1	support	2	False	empiricist↔skeptic (support); skeptic↔steward (support)	-	154.982834625
+F1-s3-b	oppose	conditional	False	True	low	oppose 3, support 3, abstain 1	none	0	False	architect↔pragmatist (support); empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (support)	-	187.104169625
+F2-s3-a	support	support	True	True	medium	support 6, oppose 1	support	5	False	architect↔pragmatist (support); pragmatist↔steward (support); skeptic↔steward (support)	-	151.828398125
+F2-s3-b	oppose	oppose	True	True	medium	oppose 5, support 2	oppose	3	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	164.320862125
+F3-s3-a	support	support	True	True	medium	support 4, oppose 2, abstain 1	support	2	False	architect↔pragmatist (oppose); empiricist↔scholar (support); empiricist↔skeptic (support); skeptic↔steward (support)	-	144.289393625
+F3-s3-b	oppose	support	False	True	low	oppose 3, support 3, abstain 1	none	0	True	architect↔pragmatist (oppose); empiricist↔scholar (support)	-	178.145008125
+F4-s3-a	oppose	oppose	True	True	high	oppose 5, abstain 2	oppose	5	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	122.745636375
+F4-s3-b	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	115.706693083
+F6-s3-a	oppose	oppose	True	True	high	oppose 6, support 1	oppose	5	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); pragmatist↔steward (oppose)	-	151.291049875
+F6-s3-b	support	support	True	True	high	support 6, oppose 1	support	5	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	141.661466875
+F8-s3-a	oppose	support	False	True	medium	support 4, oppose 3	support	1	False	pragmatist↔steward (support); skeptic↔steward (support)	-	153.701720166
+F8-s3-b	support	support	True	True	high	support 5, oppose 2	support	3	False	empiricist↔pragmatist (oppose); skeptic↔steward (support)	-	143.932317125
+AB-s4-a	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	94.475356208
+AB-s4-b	abstain	oppose	False	True	medium	oppose 4, support 2, abstain 1	oppose	2	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔skeptic (oppose)	-	109.741373708
+F1-s4-a	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	152.561347791
+F1-s4-b	oppose	oppose	True	True	medium	oppose 5, support 2	oppose	3	False	empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (support)	-	158.838202
+F2-s4-a	support	support	True	True	high	support 6, oppose 1	support	5	False	empiricist↔scholar (support); empiricist↔skeptic (support); skeptic↔steward (support)	-	154.766641
+F2-s4-b	oppose	oppose	True	True	low	oppose 7	oppose	7	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose); pragmatist↔steward (oppose); skeptic↔steward (oppose)	-	162.584886625
+F3-s4-a	support	support	True	True	low	support 7	support	7	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	171.319448458
+F3-s4-b	oppose	support	False	True	low	oppose 3, support 3, abstain 1	none	0	True	empiricist↔scholar (oppose); pragmatist↔steward (support); skeptic↔steward (support)	-	171.225241625
+F4-s4-a	oppose	oppose	True	True	high	oppose 4, abstain 3	oppose	4	False	empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); pragmatist↔steward (oppose)	-	123.701491958
+F4-s4-b	support	support	True	True	high	support 6, abstain 1	support	6	False	architect↔pragmatist (support); empiricist↔pragmatist (support); empiricist↔scholar (support); empiricist↔skeptic (support); pragmatist↔steward (support); skeptic↔steward (support)	-	120.712313542
+F6-s4-a	oppose	oppose	True	True	high	oppose 6, abstain 1	oppose	6	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	137.438180916
+F6-s4-b	support	support	True	True	high	support 5, oppose 2	support	3	False	empiricist↔skeptic (support); skeptic↔steward (support)	-	143.093476666
+F8-s4-a	oppose	oppose	True	True	high	oppose 5, abstain 2	oppose	5	False	architect↔pragmatist (oppose); empiricist↔pragmatist (oppose); empiricist↔scholar (oppose); empiricist↔skeptic (oppose)	-	145.334479125
+F8-s4-b	support	support	True	True	medium	support 4, oppose 2, abstain 1	support	2	False	empiricist↔scholar (support); empiricist↔skeptic (support)	-	132.50955925

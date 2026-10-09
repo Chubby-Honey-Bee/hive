@@ -1,0 +1,92 @@
+name: self-validation
+description: "Self-validation of HIVE — exercises every subsystem in a single fully-automated run, then gates its own verdict."
+version: 1
+
+inputs:
+  - project
+
+nodes:
+  # A command node: the runner runs db-init against the run's database and
+  # a non-zero exit fails the node.
+  init-db:
+    type: command
+    argv: [chb, db-init]
+
+  # chb validate builds a fresh database at
+  # workspace/{project}/self-validate/hive.db, runs every check against
+  # it, and prints its counts as JSON. It exits 1 when a check fails, which
+  # ok_exit lets through so check-pass can send the run to triage.
+  exercise-cli:
+    type: command
+    argv: [chb, validate, --workspace, "workspace/{project}/self-validate", --json]
+    outputs_from: stdout_json
+    outputs: [passed, failed, failures, log]
+    ok_exit: [0, 1]
+
+  check-pass:
+    type: decision
+    condition: "failed == 0"
+    true_edge: record-verdict
+    false_edge: triage
+
+  triage:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: "Validation failed: chb validate passed {passed} checks and failed {failed}, namely {failures}. Read its log at {log}, identify the root cause of each failure, and propose the minimal fix. Output diagnosis."
+    outputs: [diagnosis]
+    accept:
+      - "outputs.diagnosis != ''"
+
+  # The gate judges the self-validation's own verdict, in the database chb
+  # validate wrote. Its checks write waves 1 and 2, so the verdict is wave 3.
+  # The workflow records it and runs the gate itself: a finding holding the
+  # counts chb validate printed, then chb guard, whose exit 1 on a closed
+  # gate ok_exit lets through so accept: can name the refusal.
+  record-verdict:
+    type: command
+    argv: [chb, --db, "workspace/{project}/self-validate/hive.db", db-write, finding, '{"wave":3,"agent":"self-validation","d1":0,"mss_label":"assumption","finding":"chb validate passed {passed} checks and failed {failed}","evidence":"{log}"}']
+
+  open-gate:
+    type: command
+    argv: [chb, --db, "workspace/{project}/self-validate/hive.db", guard, --wave, "3", --eval, '{"coverage":4,"depth":4,"sources":4,"actionability":4,"mss_integrity":4,"verdict":"COMPLETE"}', --json]
+    outputs_from: stdout_json
+    outputs: [opened, errors]
+    ok_exit: [0, 1]
+    accept:
+      - "outputs.opened == true"
+
+  final-synthesis:
+    type: agent
+    agent: analyst
+    tier: planner
+    prompt: |
+      Generate the self-validation synthesis from the database chb validate
+      wrote. Read it and export its graph, one command per line:
+        chb --db workspace/{project}/self-validate/hive.db db-read summary
+        chb --db workspace/{project}/self-validate/hive.db db-read mss_audit
+        chb --db workspace/{project}/self-validate/hive.db export-graph --out workspace/{project}/graph.json
+      Write workspace/{project}/synthesis.md describing the system's verified
+      end-to-end automation. Cite any failing check from {log}. Return the
+      path you wrote as synthesis_path.
+    outputs: [synthesis_path]
+    accept:
+      - "outputs.synthesis_path != ''"
+
+edges:
+  - from: init-db
+    to: exercise-cli
+  - from: exercise-cli
+    to: check-pass
+  - from: check-pass
+    to: record-verdict
+    condition: "failed == 0"
+  - from: check-pass
+    to: triage
+    condition: "failed != 0"
+  - from: record-verdict
+    to: open-gate
+  - from: triage
+    to: final-synthesis
+  - from: open-gate
+    to: final-synthesis
